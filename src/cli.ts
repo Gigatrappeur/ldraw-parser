@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
+import { file as bunFile, write as bunWrite } from "bun";
 // ============================================================
 // LDraw Parser – CLI batch converter
 // Usage:  bun run src/cli.ts [options] <file> [file...]
 // ============================================================
 
-import Bun from 'bun'
-import { join, basename, extname, resolve, dirname } from "node:path";
+import { join, basename, extname, resolve } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { LDrawParser } from "./index";
 import { createNodeResolver, loadLdConfigNode, warmNodeResolverCache } from "./node-resolver";
@@ -298,7 +298,7 @@ async function processFile(
   // Read file
   let content: string;
   try {
-    content = await Bun.file(absInput).text();
+    content = await bunFile(absInput).text();
   } catch {
     console.error(`  ✗ Cannot read file: ${absInput}`);
     return;
@@ -371,7 +371,7 @@ async function processFile(
         : { smoothNormals: false },
     });
     const outPath = join(outDir, `${stem}.glb`);
-    await Bun.write(outPath, glb);
+    await bunWrite(outPath, glb);
     const dt = (performance.now() - t1).toFixed(1);
     console.log(`  ✓ GLB  → ${outPath}  (${fmtBytes(glb.byteLength)}, ${dt} ms)`);
   }
@@ -384,11 +384,10 @@ async function processFile(
       height:    opts.svgSize,
       azimuth:   opts.svgAzimuth,
       elevation: opts.svgElevation,
-      showEdges: true,
-      background: "#ffffff",
+      showEdges: false
     });
     const outPath = join(outDir, `${stem}.svg`);
-    await Bun.write(outPath, svg);
+    await bunWrite(outPath, svg);
     const dt = (performance.now() - t1).toFixed(1);
     console.log(`  ✓ SVG  → ${outPath}  (${fmtBytes(svg.length)}, ${dt} ms)`);
   }
@@ -402,8 +401,8 @@ async function processFile(
       normals:     opts.smooth,
       creaseAngle: opts.creaseAngle,
     });
-    await Bun.write(join(outDir, `${stem}.obj`), obj);
-    await Bun.write(join(outDir, mtlFileName),   mtl);
+    await bunWrite(join(outDir, `${stem}.obj`), obj);
+    await bunWrite(join(outDir, mtlFileName),   mtl);
     const dt = (performance.now() - t1).toFixed(1);
     console.log(`  ✓ OBJ  → ${join(outDir, stem + ".obj")}  (${fmtBytes(obj.length + mtl.length)}, ${dt} ms)`);
   }
@@ -425,7 +424,7 @@ async function processFile(
       })),
     };
     const outPath = join(outDir, `${stem}.json`);
-    await Bun.write(outPath, JSON.stringify(payload, null, 2));
+    await bunWrite(outPath, JSON.stringify(payload, null, 2));
     const dt = (performance.now() - t1).toFixed(1);
     console.log(`  ✓ JSON → ${outPath}  (${dt} ms)`);
   }

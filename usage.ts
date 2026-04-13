@@ -5,14 +5,14 @@
 // Run with:  bun run examples/usage.ts
 
 import { join } from "node:path";
-import { LDrawParser } from "../src/index";
-import type { LDrawFile, FlatGeometry } from "../src/types";
+import { LDrawParser } from "./src/index";
+import type { FlatGeometry } from "./src/types";
 
 // ─────────────────────────────────────────────────────────────
 // 1. Basic setup: file resolver using the local LDraw library
 // ─────────────────────────────────────────────────────────────
 
-const LDRAW_LIB = process.env.LDRAW_LIB ?? "/usr/share/ldraw"; // adjust to your installation
+const LDRAW_LIB = process.env['LDRAW_LIB'] ?? "/usr/share/ldraw"; // adjust to your installation
 
 async function fileResolver(name: string): Promise<string | null> {
   // LDraw file name resolution order:

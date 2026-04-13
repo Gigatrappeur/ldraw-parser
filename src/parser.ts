@@ -13,7 +13,6 @@ import {
   type LDrawQuad,
   type LDrawOptionalLine,
   type LDrawColor,
-  type Matrix4,
   type Vec3,
   type TexmapDefinition,
   type TexmapPlanar,
@@ -168,13 +167,13 @@ function parseMeta(
   // BFC
   if (/^BFC\b/i.test(body)) {
     const bfcBody = body.replace(/^BFC\s*/i, "").toUpperCase().trim();
-    if (bfcBody.includes("CERTIFY")) {
-      meta.bfcCertified = true;
-      meta.bfcWinding = bfcBody.includes("CCW") ? "CCW" : "CW";
-      result.bfc = bfcBody.includes("CW") ? "CERTIFY CW" : "CERTIFY CCW";
-    } else if (bfcBody === "NOCERTIFY") {
+    if (bfcBody === "NOCERTIFY") {
       meta.bfcCertified = false;
       result.bfc = "NOCERTIFY";
+    } else if (bfcBody.includes("CERTIFY")) {
+      meta.bfcCertified = true;
+      meta.bfcWinding = bfcBody.includes("CCW") ? "CCW" : "CW";
+      result.bfc = bfcBody.includes("CCW") ? "CERTIFY CCW" : "CERTIFY CW";
     } else if (bfcBody === "CW" || bfcBody === "CCW") {
       result.bfc = bfcBody as BFCStatement;
     } else if (bfcBody === "INVERTNEXT") {

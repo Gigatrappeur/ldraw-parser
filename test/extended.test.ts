@@ -140,7 +140,7 @@ describe("weldMesh", () => {
   test("UV coords preserved when present", () => {
     const meshWithUV: GeometryMesh = {
       ...FLAT_QUAD_MESH,
-      triangles: FLAT_QUAD_MESH.triangles.map((t, i) => ({
+      triangles: FLAT_QUAD_MESH.triangles.map(t => ({
         a: { position: t.a.position, uv: { u: 0, v: 0 } },
         b: { position: t.b.position, uv: { u: 1, v: 0 } },
         c: { position: t.c.position, uv: { u: 1, v: 1 } },
@@ -715,7 +715,7 @@ describe("Full pipeline: parse → weld → GLB → JSON", () => {
   });
 
   test("OBJ output has correct vertex count (deduped)", () => {
-    const parser = new LDrawParser();
+    // const parser = new LDrawParser();
     const geo = {
       meshes: [makeMesh(
         Array.from({ length: 12 }, (_, i): [Vec3, Vec3, Vec3] => [

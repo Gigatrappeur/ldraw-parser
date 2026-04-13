@@ -39,7 +39,7 @@ export {
 import { type LDrawParserOptions, type ResolverContext, type FlatGeometry, type LDrawFile, type LDrawColor } from "./types";
 import { buildColorTable, getDefaultColorTable } from "./colors";
 import { parseLDrawFile } from "./parser";
-import { flattenGeometry, loadLDrawModel } from "./resolver";
+import { loadLDrawModel } from "./resolver";
 import { generateSvgThumbnail, type SvgCameraOptions } from "./svg";
 import { generateGlb, type GlbOptions } from "./glb";
 import { normalizeFileName } from "./utils";
@@ -250,3 +250,29 @@ export {
   type LDrawWarning,
   type ParseResult,
 } from "./errors";
+export {
+  weldMesh,
+  weldGeometry,
+  mergeWeldedMeshes,
+  type WeldOptions,
+  type WeldedMesh,
+} from "./weld";
+
+export {
+  serialiseLDrawFile,
+  serialiseColor,
+  buildLDrawFile,
+  buildMpd,
+  type SerialiseOptions,
+  type MinimalFileOptions,
+} from "./serialise";
+export {
+  extractSteps,
+  hasSteps,
+  generateStepGeometries,
+  rotationToMatrix,
+  computeCameraRotations,
+  type BuildStep,
+  type StepRotation,
+  type StepGeometry,
+} from "./steps";
