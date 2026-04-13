@@ -4,7 +4,6 @@
 
 import {
   type LDrawFile,
-  type LDrawCommand,
   type LDrawSubFileRef,
   type LDrawColor,
   type Matrix4,
@@ -12,7 +11,6 @@ import {
   type GeometryMesh,
   type GeometryEdges,
   type GeometryVertex,
-  type TexmapDefinition,
   type ResolverContext,
 } from "./types";
 import { parseLDrawFile } from "./parser";
@@ -29,7 +27,6 @@ import {
 } from "./utils";
 import {
   resolveColor,
-  MAIN_COLOR_CODE,
   isMetaColorCode,
 } from "./colors";
 

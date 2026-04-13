@@ -398,7 +398,9 @@ describe("extractSteps", () => {
     expect(steps[1]!.rotation!.x).toBe(30);
     expect(steps[1]!.rotation!.y).toBe(45);
     expect(steps[1]!.rotation!.type).toBe("REL");
-    expect(steps[2]!.rotation).toBeUndefined(); // END cleared it
+    // ROTSTEP END is preserved on the step so computeCameraRotations can clear the camera.
+    // The step carries {type:"END"}, not undefined.
+    expect(steps[2]!.rotation?.type).toBe("END");
   });
 });
 

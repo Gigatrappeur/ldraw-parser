@@ -8,7 +8,7 @@
 //   + case-insensitive fallback (important on Linux)
 // ============================================================
 
-import { join, dirname, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { readdir } from "node:fs/promises";
 
 // ── Search-path spec ──────────────────────────────────────────
