@@ -56,9 +56,18 @@ import {
 
 export class LDrawParser {
   private ctx: ResolverContext;
-  private opts: Required<LDrawParserOptions>;
+  private opts: {
+    flatten: boolean;
+    keepRawLines: boolean;
+  };
 
   constructor(options: LDrawParserOptions = {}) {
+    
+    this.opts = {
+      flatten:       options.flatten       ?? true,
+      keepRawLines:  options.keepRawLines  ?? false
+    };
+
     const colorTable = options.colorTable ?? getDefaultColorTable();
     // Default color for code 16 with no parent: Light Bluish Grey (71),
     // the standard display color used by LDraw reference viewers.
@@ -68,27 +77,14 @@ export class LDrawParser {
       colorTable.get(7)  ??   // Light_Grey fallback
       colorTable.get(15) ??   // White fallback
       colorTable.get(0)!;     // Black last resort
-
-    this.opts = {
-      resolveFile:   options.resolveFile   ?? (() => null),
-      colorTable,
-      processBFC:    options.processBFC    ?? true,
-      flatten:       options.flatten       ?? true,
-      keepRawLines:  options.keepRawLines  ?? false,
-      maxDepth:      options.maxDepth      ?? 64,
-      defaultColor,
-    };
-
+    
     this.ctx = {
-      colorTable:   this.opts.colorTable,
-      resolveFile: async (name: string) => {
-        const result = await this.opts.resolveFile(name);
-        return result ?? null;
-      },
-      processBFC:   this.opts.processBFC,
-      maxDepth:     this.opts.maxDepth,
-      defaultColor: this.opts.defaultColor!,
-      cache:        new Map(),
+      colorTable,
+      resolveFile: options.resolveFile ?? ((_: string) => Promise.resolve(null)),
+      processBFC: options.processBFC ?? true,
+      maxDepth: options.maxDepth ?? 64,
+      defaultColor,
+      cache: new Map(),
     };
   }
 
@@ -112,8 +108,9 @@ export class LDrawParser {
   async parse(
     content: string,
     name = "model.ldr",
+    ctxOverride?: Partial<ResolverContext>
   ): Promise<{ file: LDrawFile; geometry?: FlatGeometry }> {
-    return loadLDrawModel(content, normalizeFileName(name), this.ctx, this.opts.flatten);
+    return loadLDrawModel(content, normalizeFileName(name), { ...this.ctx, ...ctxOverride }, this.opts.flatten);
   }
 
   /**

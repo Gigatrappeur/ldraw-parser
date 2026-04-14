@@ -278,7 +278,7 @@ export interface LDrawParserOptions {
    * Called with the raw file name as written in the type-1 command.
    * Return null / undefined if the file cannot be found.
    */
-  resolveFile?: (name: string) => Promise<string | null | undefined> | string | null | undefined;
+  resolveFile?: (name: string) => Promise<string | null | undefined>;
 
   /** Pre-loaded colour table (LDConfig.ldr). Parsed automatically if omitted. */
   colorTable?: Map<number, LDrawColor>;
