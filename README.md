@@ -357,7 +357,7 @@ Le GLB est généré en **mètres** par défaut (`unit: "m"`) pour respecter la 
 
 exemple phare rouge : 6513963
 ```bash
-bun run src/cli -f svg,glb --el 150 --lib <path>\ldraw\ -v --color 36 <path>\ldraw\parts\3024.dat
+bun run src/cli -f svg,glb --el 150 --lib <path>\ldraw\ -v --no-smooth --color 36 <path>\ldraw\parts\3024.dat
 ```
 
 ## Tests
