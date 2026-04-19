@@ -128,27 +128,29 @@ function buildCamera(geo: FlatGeometry, opts: Required<SvgCameraOptions>): Camer
 
 // ── Shading ───────────────────────────────────────────────────
 
-/**
- * Two-source Lambert shading in LDraw world space (Y-down).
- * Returns a multiplier in [ambient, 1.0].
- * Light directions are expressed in LDraw Y-down convention:
- *   y < 0  →  pointing upward in LDraw = illuminates top faces.
- */
-function shadeFactor(a: Vec3, b: Vec3, c: Vec3): number {
+function shadeFactor(a: Vec3, b: Vec3, c: Vec3, cam: Camera): number {
   const ab = vec3Sub(b, a);
   const ac = vec3Sub(c, a);
   const n  = vec3Normalize(vec3Cross(ab, ac));
 
-  // Key light: upper-front-right in LDraw space (y-down → negative y = up)
-  const key  = vec3Normalize({ x: 0.6, y: -1.0, z: 0.4 });
-  // Fill light: lower-left-back  (softer)
-  const fill = vec3Normalize({ x: -0.4, y: 0.6, z: -0.3 });
+  // Transformer la normale en espace vue (avec Y-flip identique à project())
+  const m = cam.m;
+  const nv = vec3Normalize({
+    x: (m[0]??0)*n.x + (m[1]??0)*(-n.y) + (m[2]??0)*n.z,
+    y: (m[3]??0)*n.x + (m[4]??0)*(-n.y) + (m[5]??0)*n.z,
+    z: (m[6]??0)*n.x + (m[7]??0)*(-n.y) + (m[8]??0)*n.z,
+  });
 
-  const dKey  = Math.max(0, vec3Dot(n, key));
-  const dFill = Math.max(0, vec3Dot(n, fill));
+  // Lumières en espace caméra (invariantes par rapport à az/el)
+  // Key  : haut-droite, légèrement vers le viewer (z < 0 = vers l'avant)
+  // Fill : bas-gauche, de derrière (contre-jour doux)
+  const key  = vec3Normalize({ x:  0.6, y:  0.8, z: -0.5 });  // était y: -0.8
+  const fill = vec3Normalize({ x: -0.4, y: -0.5, z:  0.3 });  // était y:  0.5
 
-  // ambient + key contribution + fill contribution
-  return 0.25 + 0.65 * dKey + 0.15 * dFill;
+  const dKey  = Math.max(0, vec3Dot(nv, key));
+  const dFill = Math.max(0, vec3Dot(nv, fill));
+
+  return 0.68 + 0.52 * dKey + 0.18 * dFill;
 }
 
 // ── SVG color helpers ─────────────────────────────────────────
@@ -214,8 +216,8 @@ export function generateSvgThumbnail(
 
       // Shading — always computed from world-space normal (LDraw Y-down)
       // For back-faces we negate the factor to still get a lit appearance.
-      let lf = shadeFactor(a.position, b.position, c.position);
-      if (!isFrontFace) lf = shadeFactor(c.position, b.position, a.position); // reversed winding
+      let lf = shadeFactor(a.position, b.position, c.position, cam);
+      if (!isFrontFace) lf = shadeFactor(c.position, b.position, a.position, cam);
 
       // Use minimum (nearest) vertex depth for sort key so closer faces win
       const za = viewZ(a.position, cam);
@@ -261,16 +263,16 @@ export function generateSvgThumbnail(
   // Tiny anti-artifact stroke (same color as fill, 0.3px) closes seams
   // between adjacent coplanar faces from painter-algo imprecision.
   const pathParts = faces.map(
-    (f) => `<path d="${f.d}" fill="${f.fill}" opacity="${f.opacity.toFixed(3)}"` +
-            ` stroke="${f.fill}" stroke-width="0.3" stroke-linejoin="round"/>`,
-  );
+  (f) => `<path d="${f.d}" fill="${f.fill}" opacity="${f.opacity.toFixed(3)}"` +
+          ` stroke="${f.fill}" stroke-width="0.5"/>`,
+);
 
   const parts = [
     `<svg xmlns="http://www.w3.org/2000/svg"`,
     ` width="${opts.width}" height="${opts.height}"`,
     ` viewBox="0 0 ${opts.width} ${opts.height}">`,
     bg,
-    `<g id="faces">${pathParts.join("")}</g>`,
+    `<g id="faces" shape-rendering="crispEdges">${pathParts.join("")}</g>`,
     opts.showEdges && edgeLines.length > 0
       ? `<g id="edges">${edgeLines.join("")}</g>`
       : "",

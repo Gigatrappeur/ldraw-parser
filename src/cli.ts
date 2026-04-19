@@ -384,7 +384,7 @@ async function processFile(
       height:    opts.svgSize,
       azimuth:   opts.svgAzimuth,
       elevation: opts.svgElevation,
-      showEdges: false
+      showEdges: false,
     });
     const outPath = join(outDir, `${stem}.svg`);
     await bunWrite(outPath, svg);
