@@ -1,15 +1,11 @@
 // ============================================================
-// LDraw Parser – SVG thumbnail generator  (v2)
+// LDraw Parser – SVG thumbnail generator  (v2.2)
 // ============================================================
 //
-// Improvements over v1:
-//   • Back-face culling via screen-space signed-area test
-//     → back-faces no longer bleed through the model
-//   • Degenerate-triangle skip (zero area → no artifact)
-//   • Min-depth sort key for each face (more stable than centroid)
-//   • Two-source Lambert shading (key + fill lights)
-//   • Thin inter-face stroke to hide painter-algo seams
-//   • Back-face optional two-sided rendering for uncertified parts
+// v2:   back-face culling, degenerate skip, Lambert shading
+// v2.1: Y-flip via SVG transform
+// v2.2: centroid depth sort + normal-bias tie-breaker
+//       → fixes coplanar triangle ordering (3003 stud artifacts)
 // ============================================================
 
 import type { FlatGeometry, Vec3 } from "./types";
@@ -56,18 +52,13 @@ interface Face {
   d:       string;   // SVG path data
   fill:    string;   // rgb(…)
   opacity: number;   // 0–1
-  depth:   number;   // view-space Z, larger = further away
+  depth:   number;   // sort key, larger = further away
 }
 
 // ── Math helpers ──────────────────────────────────────────────
 
 function degToRad(d: number): number { return (d * Math.PI) / 180; }
 
-/**
- * Project a world-space Vec3 to [sx, sy] in screen space.
- * Y is negated so that LDraw Y-down maps to a Y-up view convention;
- * SVG then naturally places Y-up objects correctly.
- */
 function project(v: Vec3, cam: Camera): [number, number] {
   const m = cam.m;
   const sx = ((m[0]??0)*v.x + (m[1]??0)*(-v.y) + (m[2]??0)*v.z) * cam.scale + cam.tx;
@@ -75,12 +66,10 @@ function project(v: Vec3, cam: Camera): [number, number] {
   return [sx, sy];
 }
 
-/** View-space Z (depth, positive = further from viewer). */
 function viewZ(v: Vec3, cam: Camera): number {
   return (cam.m[6]??0)*v.x + (cam.m[7]??0)*(-v.y) + (cam.m[8]??0)*v.z;
 }
 
-/** 2-D signed area of a projected triangle (positive = CCW in SVG-Y-down space = front-facing). */
 function signedArea2(ax: number, ay: number, bx: number, by: number, cx: number, cy: number): number {
   return (bx - ax) * (cy - ay) - (cx - ax) * (by - ay);
 }
@@ -93,17 +82,12 @@ function buildCamera(geo: FlatGeometry, opts: Required<SvgCameraOptions>): Camer
   const cosAz = Math.cos(az), sinAz = Math.sin(az);
   const cosEl = Math.cos(el), sinEl = Math.sin(el);
 
-  // Ry(az) * Rx(-el), row-major:
-  //   row0 (screen X): [ cosAz,         0,      -sinAz      ]
-  //   row1 (screen Y): [ sinAz*sinEl,   cosEl,   cosAz*sinEl ]
-  //   row2 (depth Z):  [ sinAz*cosEl,  -sinEl,   cosAz*cosEl ]
   const m: number[] = [
     cosAz,          0,     -sinAz,
     sinAz * sinEl,  cosEl,  cosAz * sinEl,
     sinAz * cosEl, -sinEl,  cosAz * cosEl,
   ];
 
-  // Fit AABB corners into viewport
   const { aabb } = geo;
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for (const dx of [aabb.min.x, aabb.max.x])
@@ -133,7 +117,6 @@ function shadeFactor(a: Vec3, b: Vec3, c: Vec3, cam: Camera): number {
   const ac = vec3Sub(c, a);
   const n  = vec3Normalize(vec3Cross(ab, ac));
 
-  // Transformer la normale en espace vue (avec Y-flip identique à project())
   const m = cam.m;
   const nv = vec3Normalize({
     x: (m[0]??0)*n.x + (m[1]??0)*(-n.y) + (m[2]??0)*n.z,
@@ -141,11 +124,8 @@ function shadeFactor(a: Vec3, b: Vec3, c: Vec3, cam: Camera): number {
     z: (m[6]??0)*n.x + (m[7]??0)*(-n.y) + (m[8]??0)*n.z,
   });
 
-  // Lumières en espace caméra (invariantes par rapport à az/el)
-  // Key  : haut-droite, légèrement vers le viewer (z < 0 = vers l'avant)
-  // Fill : bas-gauche, de derrière (contre-jour doux)
-  const key  = vec3Normalize({ x:  0.6, y:  0.8, z: -0.5 });  // était y: -0.8
-  const fill = vec3Normalize({ x: -0.4, y: -0.5, z:  0.3 });  // était y:  0.5
+  const key  = vec3Normalize({ x:  0.6, y:  0.8, z: -0.5 });
+  const fill = vec3Normalize({ x: -0.4, y: -0.5, z:  0.3 });
 
   const dKey  = Math.max(0, vec3Dot(nv, key));
   const dFill = Math.max(0, vec3Dot(nv, fill));
@@ -198,32 +178,39 @@ export function generateSvgThumbnail(
     for (const tri of mesh.triangles) {
       const { a, b, c } = tri;
 
-      // Project to screen space
       const [ax, ay] = project(a.position, cam);
       const [bx, by] = project(b.position, cam);
       const [cx, cy] = project(c.position, cam);
 
-      // Skip degenerate triangles (zero / near-zero area on screen)
       const sa2 = signedArea2(ax, ay, bx, by, cx, cy);
       if (Math.abs(sa2) < 0.01) continue;
 
-      // Back-face culling:
-      // After our projection (LDraw Y-down → view Y-up, then SVG Y-down),
-      // front-facing triangles have NEGATIVE screen-space signed area
-      // (CCW in math convention = CW in SVG Y-down = negative sa2).
       const isFrontFace = sa2 < 0;
       if (!isFrontFace && !opts.twoSided) continue;
 
-      // Shading — always computed from world-space normal (LDraw Y-down)
-      // For back-faces we negate the factor to still get a lit appearance.
       let lf = shadeFactor(a.position, b.position, c.position, cam);
       if (!isFrontFace) lf = shadeFactor(c.position, b.position, a.position, cam);
 
-      // Use minimum (nearest) vertex depth for sort key so closer faces win
       const za = viewZ(a.position, cam);
       const zb = viewZ(b.position, cam);
       const zc = viewZ(c.position, cam);
-      const depth = Math.min(za, zb, zc);
+
+      // Centroid depth — more stable than min for curved/stud geometry
+      const centroid = (za + zb + zc) / 3;
+
+      // Normal-bias tie-breaker for coplanar triangles:
+      // compute view-space Z component of face normal (with Y-flip)
+      const abx = b.position.x - a.position.x, aby = b.position.y - a.position.y, abz = b.position.z - a.position.z;
+      const acx = c.position.x - a.position.x, acy = c.position.y - a.position.y, acz = c.position.z - a.position.z;
+      const wnx = aby * acz - abz * acy;
+      const wny = abz * acx - abx * acz;
+      const wnz = abx * acy - aby * acx;
+      // Project normal onto view Z (with Y-flip matching project())
+      const nvz = (cam.m[6]??0)*wnx + (cam.m[7]??0)*(-wny) + (cam.m[8]??0)*wnz;
+      // nvz < 0 → normal toward camera → face is "on top" → draw last → smaller depth key
+      const normalBias = nvz < 0 ? -0.01 : 0.01;
+
+      const depth = centroid + normalBias;
 
       faces.push({
         d: `M${ax.toFixed(1)},${ay.toFixed(1)} L${bx.toFixed(1)},${by.toFixed(1)} L${cx.toFixed(1)},${cy.toFixed(1)} Z`,
@@ -260,22 +247,25 @@ export function generateSvgThumbnail(
     ? `<rect width="${opts.width}" height="${opts.height}" fill="${opts.background}"/>`
     : "";
 
-  // Tiny anti-artifact stroke (same color as fill, 0.3px) closes seams
-  // between adjacent coplanar faces from painter-algo imprecision.
   const pathParts = faces.map(
-  (f) => `<path d="${f.d}" fill="${f.fill}" opacity="${f.opacity.toFixed(3)}"` +
-          ` stroke="${f.fill}" stroke-width="0.5"/>`,
-);
+    (f) => `<path d="${f.d}" fill="${f.fill}" opacity="${f.opacity.toFixed(3)}"` +
+            ` stroke="${f.fill}" stroke-width="0.5"/>`,
+  );
+
+  // Y-flip via SVG transform: LDraw Y-down → affichage Y-up
+  const flipTransform = `translate(0,${opts.height}) scale(1,-1)`;
 
   const parts = [
     `<svg xmlns="http://www.w3.org/2000/svg"`,
     ` width="${opts.width}" height="${opts.height}"`,
     ` viewBox="0 0 ${opts.width} ${opts.height}">`,
     bg,
+    `<g transform="${flipTransform}">`,
     `<g id="faces" shape-rendering="crispEdges">${pathParts.join("")}</g>`,
     opts.showEdges && edgeLines.length > 0
       ? `<g id="edges">${edgeLines.join("")}</g>`
       : "",
+    `</g>`,
     `</svg>`,
   ];
 
