@@ -47,6 +47,7 @@ function makeColor(
     isTransparent: alpha < 255,
     rgba: intToRgba(v, alpha),
     edgeRgba: intToRgba(e, 255),
+    hex: value
   };
 }
 

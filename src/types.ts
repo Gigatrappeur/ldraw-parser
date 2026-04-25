@@ -45,6 +45,7 @@ export interface LDrawColor {
   rgba: [number, number, number, number];
   /** Edge RGBA tuple, each 0-1 */
   edgeRgba: [number, number, number, number];
+  hex: string
 }
 
 // ── Matrix / Geometry ────────────────────────────────────────
