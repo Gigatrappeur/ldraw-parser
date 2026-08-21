@@ -185,8 +185,9 @@ export function generateObj(
   for (let mi = 0; mi < meshes.length; mi++) {
     const mesh = meshes[mi]!;
     // const flatMesh = transformed.meshes[mi]!;
-    usedColors.set(mesh.colorCode, mesh.color);
-    const matName = `${sanitizeName(mesh.color.name)}_${mesh.colorCode}`;
+    const color = transformed.colorTable?.get(mesh.colorCode);
+    usedColors.set(mesh.colorCode, color!);
+    const matName = `${sanitizeName(color!.name)}_${mesh.colorCode}`;
 
     for (const tri of mesh.triangles) {
       const verts: ObjFace["verts"] = [];

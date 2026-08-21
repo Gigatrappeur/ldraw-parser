@@ -245,7 +245,7 @@ describe("Geometry flattening", () => {
     const p = makeParser();
     const { geometry } = await p.parse(TRANSPARENT_PART, "trans.dat");
     const meshes = geometry!.meshes;
-    expect(meshes.some((m) => m.color.isTransparent)).toBe(true);
+    expect(meshes.some((m) => geometry!.colorTable.get(m.colorCode)?.isTransparent)).toBe(true);
   });
 
   test("resolves embedded MPD sub-files", async () => {

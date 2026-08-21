@@ -117,7 +117,8 @@ export function generateGlb(
   for (const mesh of geometry.meshes) {
     if (!colorIndexMap.has(mesh.colorCode)) {
       colorIndexMap.set(mesh.colorCode, materials.length);
-      materials.push(colorToGltfMaterial(mesh.color, materials.length));
+      const color = geometry.colorTable?.get(mesh.colorCode);
+      materials.push(colorToGltfMaterial(color!, materials.length));
     }
   }
 
@@ -292,6 +293,7 @@ export function generateGlb(
       attributes.TEXCOORD_0 = uvAccessor;
     }
 
+    const color = geometry.colorTable?.get(mesh.colorCode);
     const materialIdx = colorIndexMap.get(mesh.colorCode) ?? 0;
 
     primitives.push({

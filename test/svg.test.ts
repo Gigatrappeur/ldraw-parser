@@ -19,10 +19,10 @@ const TRANS = table.get(285) ?? { ...RED, alpha: 128, isTransparent: true, rgba:
 function v(x: number, y: number, z: number): Vec3 { return { x, y, z }; }
 
 function tri(a: Vec3, b: Vec3, c: Vec3, color: LDrawColor = RED): GeometryMesh {
-  return { colorCode: color.code, color, triangles: [{ a: { position: a }, b: { position: b }, c: { position: c } }] };
+  return { colorCode: color.code, triangles: [{ a: { position: a }, b: { position: b }, c: { position: c } }] };
 }
 
-function geo(meshes: GeometryMesh[]): FlatGeometry {
+function makeGeo(meshes: GeometryMesh[], edges: FlatGeometry["edges"] = []): FlatGeometry {
   // Compute real AABB from actual vertex positions so camera framing is correct.
   let minX = Infinity, minY = Infinity, minZ = Infinity;
   let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
@@ -40,11 +40,27 @@ function geo(meshes: GeometryMesh[]): FlatGeometry {
   const cx2=(minX+maxX)/2, cy2=(minY+maxY)/2, cz2=(minZ+maxZ)/2;
   const sx2=maxX-minX, sy2=maxY-minY, sz2=maxZ-minZ;
   const r=Math.sqrt((sx2/2)**2+(sy2/2)**2+(sz2/2)**2)||1;
+  const colorTable = new Map<number, LDrawColor>();
+  for (const m of meshes) colorTable.set(m.colorCode, table.get(m.colorCode)!);
+  for (const e of edges) colorTable.set(e.colorCode, table.get(e.colorCode)!);
   return {
-    meshes, edges: [],
+    meshes, edges,
+    colorTable,
     aabb: { min: v(minX,minY,minZ), max: v(maxX,maxY,maxZ),
             center: v(cx2,cy2,cz2), size: v(sx2,sy2,sz2), radius: r },
   };
+}
+
+function geo(meshes: GeometryMesh[]): FlatGeometry {
+  return makeGeo(meshes);
+}
+
+function fillColorTable(geometry: FlatGeometry): FlatGeometry {
+  if (geometry.colorTable) return geometry;
+  const colorTable = new Map<number, LDrawColor>();
+  for (const m of geometry.meshes) colorTable.set(m.colorCode, table.get(m.colorCode)!);
+  for (const e of geometry.edges) colorTable.set(e.colorCode, table.get(e.colorCode)!);
+  return { ...geometry, colorTable };
 }
 
 /** Extract all <path> fill colors from SVG */
@@ -96,7 +112,7 @@ describe("SVG structure", () => {
   });
 
   test("empty geometry returns minimal SVG without paths", () => {
-    const svg = generateSvgThumbnail({ meshes: [], edges: [], aabb: { min: v(0,0,0), max: v(0,0,0), center: v(0,0,0), size: v(0,0,0), radius: 0 } });
+    const svg = generateSvgThumbnail(fillColorTable({ meshes: [], edges: [], aabb: { min: v(0,0,0), max: v(0,0,0), center: v(0,0,0), size: v(0,0,0), radius: 0 } }));
     expect(svg).toContain("<svg");
     expect(pathCount(svg)).toBe(0);
   });
@@ -108,8 +124,8 @@ describe("SVG structure", () => {
 
   test("edges group present when showEdges=true and edges exist", () => {
     const geoWithEdges: FlatGeometry = {
-      ...geo([tri(v(0,0,0), v(10,0,0), v(5,10,0))]),
-      edges: [{ colorCode: 0, color: table.get(0)!, segments: [{ start: v(0,0,0), end: v(10,0,0) }] }],
+      ...makeGeo([tri(v(0,0,0), v(10,0,0), v(5,10,0))]),
+      edges: [{ colorCode: 0, segments: [{ start: v(0,0,0), end: v(10,0,0) }] }],
     };
     const svg = generateSvgThumbnail(geoWithEdges, { showEdges: true });
     expect(svg).toContain('id="edges"');
@@ -118,8 +134,8 @@ describe("SVG structure", () => {
 
   test("no edges group when showEdges=false", () => {
     const geoWithEdges: FlatGeometry = {
-      ...geo([tri(v(0,0,0), v(10,0,0), v(5,10,0))]),
-      edges: [{ colorCode: 0, color: table.get(0)!, segments: [{ start: v(0,0,0), end: v(10,0,0) }] }],
+      ...makeGeo([tri(v(0,0,0), v(10,0,0), v(5,10,0))]),
+      edges: [{ colorCode: 0, segments: [{ start: v(0,0,0), end: v(10,0,0) }] }],
     };
     const svg = generateSvgThumbnail(geoWithEdges, { showEdges: false });
     expect(svg).not.toContain("<line");
@@ -141,7 +157,7 @@ describe("Back-face culling", () => {
       [v(-s,-s,s), v(s,-s,s), v(s,s,s)], [v(-s,-s,s), v(s,s,s), v(-s,s,s)],
       [v(s,-s,-s), v(-s,-s,-s), v(-s,s,-s)], [v(s,-s,-s), v(-s,s,-s), v(s,s,-s)],
     ];
-    return { colorCode: 4, color: RED, triangles: tris.map(([a,b,c]) => ({ a:{position:a}, b:{position:b}, c:{position:c} })) };
+    return { colorCode: 4, triangles: tris.map(([a,b,c]) => ({ a:{position:a}, b:{position:b}, c:{position:c} })) };
   }
 
   test("twoSided=false produces fewer paths than twoSided=true for a cube", () => {

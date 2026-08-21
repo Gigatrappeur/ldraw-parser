@@ -102,11 +102,12 @@ async function parseModel(ldrPath: string) {
     console.log(`Radius:    ${geometry.aabb.radius.toFixed(2)} LDU`);
 
     // Show transparent colour usage
-    const transparentMeshes = geometry.meshes.filter((m) => m.color.isTransparent);
+    const transparentMeshes = geometry.meshes.filter((m) => geometry.colorTable?.get(m.colorCode)?.isTransparent);
     if (transparentMeshes.length) {
       console.log(`\nTransparent meshes: ${transparentMeshes.length}`);
       for (const m of transparentMeshes) {
-        console.log(`  code ${m.colorCode} "${m.color.name}" alpha=${m.color.alpha}`);
+        const color = geometry.colorTable?.get(m.colorCode);
+        console.log(`  code ${m.colorCode} "${color?.name}" alpha=${color?.alpha}`);
       }
     }
   }

@@ -240,9 +240,8 @@ export interface GeometryVertex {
 }
 
 export interface GeometryMesh {
-  /** Unique color code of this mesh group */
+  /** Unique color code of this mesh group — resolve via FlatGeometry.colorTable */
   colorCode: number;
-  color: LDrawColor;
   triangles: Array<{
     a: GeometryVertex;
     b: GeometryVertex;
@@ -254,13 +253,14 @@ export interface GeometryMesh {
 
 export interface GeometryEdges {
   colorCode: number;
-  color: LDrawColor;
   segments: Array<{ start: Vec3; end: Vec3 }>;
 }
 
 export interface FlatGeometry {
   meshes: GeometryMesh[];
   edges: GeometryEdges[];
+  /** Color lookup table — resolves any mesh/edge colorCode back to LDrawColor */
+  colorTable?: Map<number, LDrawColor>;
   /** Axis-aligned bounding box in LDraw units */
   aabb: {
     min: Vec3;
@@ -319,9 +319,4 @@ export interface ResolverContext {
   maxDepth: number;
   /** Cache: resolved name → parsed LDrawFile */
   cache: Map<string, LDrawFile>;
-  /**
-   * Top-level default color for code 16 when there is no parent.
-   * Light Bluish Grey (71) by default.
-   */
-  defaultColor: LDrawColor;
 }

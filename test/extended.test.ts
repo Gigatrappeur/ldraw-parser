@@ -44,7 +44,6 @@ function makeMesh(
 ): GeometryMesh {
   return {
     colorCode,
-    color,
     triangles: triangles.map(([a, b, c]) => ({
       a: { position: a },
       b: { position: b },
@@ -86,9 +85,16 @@ function makeCubeMesh(size = 10): GeometryMesh {
 }
 
 function makeFlatGeometry(meshes: GeometryMesh[]): FlatGeometry {
+  const colorTable = new Map<number, LDrawColor>();
+  for (const m of meshes) {
+    if (!colorTable.has(m.colorCode)) {
+      colorTable.set(m.colorCode, buildColorTable().get(m.colorCode) ?? RED_COLOR);
+    }
+  }
   return {
     meshes,
     edges: [],
+    colorTable,
     aabb: {
       min: makeVec(-10,-10,-10), max: makeVec(10,10,10),
       center: makeVec(0,0,0), size: makeVec(20,20,20), radius: 17.32,
@@ -449,7 +455,6 @@ describe("generateObj", () => {
       ...makeFlatGeometry([FLAT_QUAD_MESH]),
       edges: [{
         colorCode: 0,
-        color: buildColorTable().get(0)!,
         segments: [{ start: makeVec(0,0,0), end: makeVec(10,0,0) }],
       }],
     };
@@ -716,6 +721,8 @@ describe("Full pipeline: parse → weld → GLB → JSON", () => {
 
   test("OBJ output has correct vertex count (deduped)", () => {
     // const parser = new LDrawParser();
+    const colorTable = new Map<number, LDrawColor>();
+    colorTable.set(4, RED_COLOR);
     const geo = {
       meshes: [makeMesh(
         Array.from({ length: 12 }, (_, i): [Vec3, Vec3, Vec3] => [
@@ -725,6 +732,7 @@ describe("Full pipeline: parse → weld → GLB → JSON", () => {
         ])
       )],
       edges: [],
+      colorTable,
       aabb: { min: makeVec(-1,-1,-1), max: makeVec(1,1,1), center: makeVec(0,0,0), size: makeVec(2,2,2), radius: 1.73 },
     };
     const { obj } = generateObj(geo, { normals: false });

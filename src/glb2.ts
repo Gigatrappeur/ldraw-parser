@@ -212,7 +212,8 @@ export async function generateGlbV2(geometry: FlatGeometry, opts: GlbOptionsV2 =
   for (const mesh of geometry.meshes) {
     if (colMatMap.has(mesh.colorCode)) continue;
     const texIdx = mesh.texmap?.texture ? (texMap.get(mesh.texmap.texture) ?? null) : null;
-    const mat = buildMaterial(mesh.color, texIdx, opts);
+    const color = geometry.colorTable?.get(mesh.colorCode);
+    const mat = buildMaterial(color!, texIdx, opts);
     const ext = mat.extensions as Record<string, unknown> | undefined;
     if (ext) for (const k of Object.keys(ext)) ctx.exts.add(k);
     colMatMap.set(mesh.colorCode, ctx.materials.length);

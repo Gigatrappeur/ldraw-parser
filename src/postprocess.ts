@@ -110,7 +110,7 @@ export function transformGeometry(
     }
   }
 
-  return { meshes, edges, aabb: aabbFinalize(box) };
+  return { ...geometry, meshes, edges, aabb: aabbFinalize(box) };
 }
 
 // ── Mesh merging ──────────────────────────────────────────────
@@ -188,11 +188,12 @@ export function extractColorPalette(geometry: FlatGeometry): ColorUsage[] {
     if (existing) {
       existing.triangleCount += mesh.triangles.length;
     } else {
+      const color = geometry.colorTable?.get(mesh.colorCode);
       map.set(mesh.colorCode, {
-        color:         mesh.color,
+        color:         color!,
         triangleCount: mesh.triangles.length,
         edgeCount:     0,
-        isTransparent: mesh.color.isTransparent,
+        isTransparent: color?.isTransparent ?? false,
       });
     }
   }
@@ -202,11 +203,12 @@ export function extractColorPalette(geometry: FlatGeometry): ColorUsage[] {
     if (existing) {
       existing.edgeCount += eg.segments.length;
     } else {
+      const color = geometry.colorTable?.get(eg.colorCode);
       map.set(eg.colorCode, {
-        color:         eg.color,
+        color:         color!,
         triangleCount: 0,
         edgeCount:     eg.segments.length,
-        isTransparent: eg.color.isTransparent,
+        isTransparent: color?.isTransparent ?? false,
       });
     }
   }
@@ -236,7 +238,7 @@ export function computeStats(geometry: FlatGeometry): GeometryStats {
 
   for (const mesh of geometry.meshes) {
     triangleCount += mesh.triangles.length;
-    if (mesh.color.isTransparent) transparentMeshes++;
+    if (geometry.colorTable?.get(mesh.colorCode)?.isTransparent) transparentMeshes++;
     if (mesh.texmap) texturedMeshes++;
   }
 
@@ -323,9 +325,8 @@ export function collectTextures(geometry: FlatGeometry): string[] {
  * Replace colors in a FlatGeometry without re-parsing.
  *
  * `overrides` maps an LDraw color code → replacement LDrawColor.
- * Every mesh and edge group whose colorCode appears in the map
- * gets its `.color` swapped out (colorCode is kept as-is so
- * downstream palette / stats tools still show the original code).
+ * The replacement is injected into a cloned colorTable so that
+ * all meshes/edges using that colorCode resolve to the new colour.
  */
 export function applyColorOverrides(
   geometry: FlatGeometry,
@@ -333,15 +334,10 @@ export function applyColorOverrides(
 ): FlatGeometry {
   if (overrides.size === 0) return geometry;
 
-  const meshes = geometry.meshes.map((mesh) => {
-    const replacement = overrides.get(mesh.colorCode);
-    return replacement ? { ...mesh, color: replacement } : mesh;
-  });
+  const colorTable = new Map(geometry.colorTable);
+  for (const [code, replacement] of overrides) {
+    colorTable.set(code, replacement);
+  }
 
-  const edges = geometry.edges.map((eg) => {
-    const replacement = overrides.get(eg.colorCode);
-    return replacement ? { ...eg, color: replacement } : eg;
-  });
-
-  return { ...geometry, meshes, edges };
+  return { ...geometry, colorTable };
 }

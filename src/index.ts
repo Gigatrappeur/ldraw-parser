@@ -37,7 +37,7 @@ export {
 // ── High-level convenience class ─────────────────────────────
 
 import { type LDrawParserOptions, type ResolverContext, type FlatGeometry, type LDrawFile, type LDrawColor } from "./types";
-import { buildColorTable, getDefaultColorTable } from "./colors";
+import { buildColorTable, getDefaultColorTable, getDefaultParentColor } from "./colors";
 import { parseLDrawFile } from "./parser";
 import { loadLDrawModel } from "./resolver";
 import { generateSvgThumbnail, type SvgCameraOptions } from "./svg";
@@ -60,6 +60,7 @@ export class LDrawParser {
     flatten: boolean;
     keepRawLines: boolean;
   };
+  private defaultColor: LDrawColor;
 
   constructor(options: LDrawParserOptions = {}) {
     
@@ -69,21 +70,15 @@ export class LDrawParser {
     };
 
     const colorTable = options.colorTable ?? getDefaultColorTable();
-    // Default color for code 16 with no parent: Light Bluish Grey (71),
-    // the standard display color used by LDraw reference viewers.
-    const defaultColor =
+    this.defaultColor =
       options.defaultColor ??
-      colorTable.get(71) ??   // Light Bluish Grey
-      colorTable.get(7)  ??   // Light_Grey fallback
-      colorTable.get(15) ??   // White fallback
-      colorTable.get(0)!;     // Black last resort
+      getDefaultParentColor(colorTable);
     
     this.ctx = {
       colorTable,
       resolveFile: options.resolveFile ?? ((_: string) => Promise.resolve(null)),
       processBFC: options.processBFC ?? true,
       maxDepth: options.maxDepth ?? 64,
-      defaultColor,
       cache: new Map(),
     };
   }
@@ -110,7 +105,13 @@ export class LDrawParser {
     name = "model.ldr",
     ctxOverride?: Partial<ResolverContext>
   ): Promise<{ file: LDrawFile; geometry?: FlatGeometry }> {
-    return loadLDrawModel(content, normalizeFileName(name), { ...this.ctx, ...ctxOverride }, this.opts.flatten);
+    return loadLDrawModel(
+      content,
+      normalizeFileName(name),
+      { ...this.ctx, ...ctxOverride },
+      this.opts.flatten,
+      this.defaultColor,
+    );
   }
 
   /**

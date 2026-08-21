@@ -29,7 +29,6 @@ export interface SmoothTriangle {
 
 export interface SmoothMesh {
   colorCode:  number;
-  color:      GeometryMesh["color"];
   triangles:  SmoothTriangle[];
   texmap?:    GeometryMesh["texmap"];
 }
@@ -150,7 +149,6 @@ export function smoothMeshNormals(
 
   return {
     colorCode: mesh.colorCode,
-    color:     mesh.color,
     triangles: smoothTriangles,
     texmap:    mesh.texmap,
   };
@@ -170,7 +168,8 @@ export function computeSmoothNormals(
 
   const meshes = geometry.meshes.map((mesh) => {
     // Transparent / special-finish parts often are smoother
-    const angle = mesh.color.isTransparent
+    const color = geometry.colorTable?.get(mesh.colorCode);
+    const angle = color?.isTransparent
       ? Math.min(defaultCrease * 1.5, Math.PI)
       : defaultCrease;
     return smoothMeshNormals(mesh, angle);

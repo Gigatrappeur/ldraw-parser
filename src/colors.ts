@@ -395,6 +395,13 @@ function fallbackColor(code: number): LDrawColor {
   return makeColor(code, `Unknown_${code}`, "808080", "595959");
 }
 
+/** Default parent colour for code 16 with no parent (top-level).
+ *  Priority: Light Blush Grey (71) → Light Grey (7) → White (15) → Black (0).
+ */
+export function getDefaultParentColor(table: Map<number, LDrawColor>): LDrawColor {
+  return table.get(71) ?? table.get(7) ?? table.get(15) ?? table.get(0)!;
+}
+
 /** Default (singleton) colour table – lazily initialised */
 let defaultTable: Map<number, LDrawColor> | null = null;
 export function getDefaultColorTable(): Map<number, LDrawColor> {

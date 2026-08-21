@@ -169,7 +169,8 @@ export function generateSvgThumbnail(
   const faces: Face[] = [];
 
   for (const mesh of geometry.meshes) {
-    const [cr, cg, cb, ca] = mesh.color.rgba;
+    const color = geometry.colorTable?.get(mesh.colorCode);
+    const [cr, cg, cb, ca] = color?.rgba ?? [0, 0, 0, 1];
     const r0 = (cr ?? 0) * 255;
     const g0 = (cg ?? 0) * 255;
     const b0 = (cb ?? 0) * 255;
@@ -228,7 +229,8 @@ export function generateSvgThumbnail(
   const edgeLines: string[] = [];
   if (opts.showEdges) {
     for (const eg of geometry.edges) {
-      const [er, eg2, eb] = eg.color.rgba;
+      const color = geometry.colorTable?.get(eg.colorCode);
+      const [er, eg2, eb] = color?.rgba ?? [0, 0, 0];
       const stroke = rgbStr((er??0)*255, (eg2??0)*255, (eb??0)*255);
       for (const seg of eg.segments) {
         const [x1, y1] = project(seg.start, cam);

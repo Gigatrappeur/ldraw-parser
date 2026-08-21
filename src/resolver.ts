@@ -151,7 +151,7 @@ async function flattenFile(
       const key = meshKey({ colorCode: color.code, texmapTexture: texmap?.texture });
 
       if (!meshMap.has(key)) {
-        meshMap.set(key, { colorCode: color.code, color, triangles: [], texmap });
+        meshMap.set(key, { colorCode: color.code, triangles: [], texmap });
       }
       const mesh = meshMap.get(key)!;
 
@@ -193,7 +193,7 @@ async function flattenFile(
       const color = resolveColor(cmd.colorCode, ctx.colorTable, parentColor);
       const key = `edge::${color.code}`;
       if (!edgeMap.has(key)) {
-        edgeMap.set(key, { colorCode: color.code, color, segments: [] });
+        edgeMap.set(key, { colorCode: color.code, segments: [] });
       }
       const edges = edgeMap.get(key)!;
       edges.segments.push({
@@ -214,6 +214,7 @@ async function flattenFile(
 export async function flattenGeometry(
   file: LDrawFile,
   ctx: ResolverContext,
+  defaultColor?: LDrawColor,
 ): Promise<FlatGeometry> {
   const meshMap = new Map<string, GeometryMesh>();
   const edgeMap = new Map<string, GeometryEdges>();
@@ -221,7 +222,7 @@ export async function flattenGeometry(
   await flattenFile(
     file,
     IDENTITY,
-    ctx.defaultColor,   // top-level default for code 16 (no parent)
+    defaultColor,
     false,
     0,
     meshMap,
@@ -231,6 +232,17 @@ export async function flattenGeometry(
 
   const meshes = [...meshMap.values()];
   const edges  = [...edgeMap.values()];
+
+  // Build a color table limited to only the colors used by the meshes/edges
+  const usedColorTable = new Map<number, LDrawColor>();
+  for (const mesh of meshes) {
+    const c = ctx.colorTable.get(mesh.colorCode);
+    if (c) usedColorTable.set(mesh.colorCode, c);
+  }
+  for (const edge of edges) {
+    const c = ctx.colorTable.get(edge.colorCode);
+    if (c) usedColorTable.set(edge.colorCode, c);
+  }
 
   // Compute AABB
   const box = aabbEmpty();
@@ -245,6 +257,7 @@ export async function flattenGeometry(
   return {
     meshes,
     edges,
+    colorTable: usedColorTable.size > 0 ? usedColorTable : undefined,
     aabb: aabbFinalize(box),
   };
 }
@@ -258,6 +271,7 @@ export async function loadLDrawModel(
   name: string,
   ctx: ResolverContext,
   flatten = true,
+  defaultColor?: LDrawColor,
 ): Promise<{ file: LDrawFile; geometry?: FlatGeometry }> {
   const file = parseLDrawFile(content, name);
 
@@ -287,11 +301,11 @@ export async function loadLDrawModel(
 
     // The first sub-file (insertion order) is the main model.
     const [, firstSubFile] = [...file.subFiles.entries()][0]!;
-    const geometry = await flattenGeometry(firstSubFile, ctx);
+    const geometry = await flattenGeometry(firstSubFile, ctx, defaultColor);
     return { file, geometry };
   }
 
   // Standard single-file or MPD where the root itself has type-1 refs
-  const geometry = await flattenGeometry(file, ctx);
+  const geometry = await flattenGeometry(file, ctx, defaultColor);
   return { file, geometry };
 }
