@@ -16,7 +16,6 @@ import type {
   LDrawFile,
   LDrawFileMeta,
   LDrawCommand,
-  LDrawComment,
   LDrawSubFileRef,
   LDrawLine,
   LDrawTriangle,

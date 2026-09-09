@@ -2,6 +2,8 @@
 // LDraw Parser – Type definitions
 // ============================================================
 
+import type { ColorTable } from "./colors";
+
 // ── Colour ──────────────────────────────────────────────────
 
 export type LDrawColorFinish =
@@ -273,16 +275,21 @@ export interface FlatGeometry {
 
 // ── Parser options ────────────────────────────────────────────
 
-export interface LDrawParserOptions {
-  /**
+export type LDrawParserOptions = 
+({
+/**
    * Resolve sub-file content.
    * Called with the raw file name as written in the type-1 command.
    * Return null / undefined if the file cannot be found.
    */
-  resolveFile?: (name: string) => Promise<string | null | undefined>;
+  resolveFile: (name: string) => Promise<string | null | undefined>;
+}
+| {  libraryRoot: string }) &
+{
+  
 
   /** Pre-loaded colour table (LDConfig.ldr). Parsed automatically if omitted. */
-  colorTable?: Map<number, LDrawColor>;
+  // colorTable?: Map<number, LDrawColor>;
 
   /** Decode BFC winding and propagate to triangles/quads (default: true) */
   processBFC?: boolean;
@@ -307,13 +314,13 @@ export interface LDrawParserOptions {
    *
    * Defaults to Light Bluish Grey (code 71) if omitted.
    */
-  defaultColor?: LDrawColor;
+  defaultColor?: number;//LDrawColor;
 }
 
 // ── Resolver context ──────────────────────────────────────────
 
 export interface ResolverContext {
-  colorTable: Map<number, LDrawColor>;
+  colorTable: ColorTable
   resolveFile: (name: string) => Promise<string | null | undefined>;
   processBFC: boolean;
   maxDepth: number;

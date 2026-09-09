@@ -2,8 +2,10 @@
 // LDraw Parser – Unit tests (bun test)
 // ============================================================
 
-import { describe, test, expect, beforeEach } from "bun:test";
-import { LDrawParser, parseLDrawFile, buildColorTable } from "../src/index";
+import { describe, test, expect } from "bun:test";
+import { LDrawParser, parseLDrawFile } from "../src/index";
+import { buildColorTable } from "./color-table";
+import { createTestResolver, buildLdConfigContent } from "./test-resolver";
 // import type { LDrawFile, FlatGeometry } from "../src/types";
 
 // ─────────────────────────────────────────────────────────────
@@ -69,7 +71,7 @@ const TEXMAP_CONTENT = `
 
 function makeParser(subFiles: Record<string, string> = {}) {
   return new LDrawParser({
-    resolveFile: (name) => subFiles[name.toLowerCase()] ?? null,
+    resolveFile: createTestResolver(subFiles),
     processBFC:  true,
     flatten:     true,
   });
@@ -245,7 +247,7 @@ describe("Geometry flattening", () => {
     const p = makeParser();
     const { geometry } = await p.parse(TRANSPARENT_PART, "trans.dat");
     const meshes = geometry!.meshes;
-    expect(meshes.some((m) => geometry!.colorTable.get(m.colorCode)?.isTransparent)).toBe(true);
+    expect(meshes.some((m) => geometry!.colorTable?.get(m.colorCode)?.isTransparent)).toBe(true);
   });
 
   test("resolves embedded MPD sub-files", async () => {
@@ -384,14 +386,17 @@ describe("GLB generator", () => {
 
 describe("LDrawParser class", () => {
   test("parseOnly does not throw", () => {
-    const p = new LDrawParser();
+    const p = new LDrawParser({ resolveFile: createTestResolver() });
     expect(() => p.parseOnly(SIMPLE_TRIANGLE)).not.toThrow();
   });
 
   test("clearCache resets resolved files", async () => {
     let callCount = 0;
     const p = new LDrawParser({
-      resolveFile: (name) => {
+      resolveFile: async (name) => {
+        if (/ldconfig\.ldr$/i.test(name)) {
+          return buildLdConfigContent(buildColorTable());
+        }
         callCount++;
         return `0 Part\n3 16 0 0 0 10 0 0 5 10 0`;
       },
@@ -404,9 +409,10 @@ describe("LDrawParser class", () => {
     expect(callCount).toBeGreaterThan(first);
   });
 
-  test("loadColorTable adds custom colours", () => {
-    const p = new LDrawParser();
-    p.loadColorTable("0 !COLOUR Custom CODE 9999 VALUE #ABCDEF EDGE #000000");
-    expect(p.colorTable.has(9999)).toBe(true);
+  test("parseOnly returns parsed file metadata", () => {
+    const p = new LDrawParser({ resolveFile: createTestResolver() });
+    const file = p.parseOnly(SIMPLE_TRIANGLE);
+    expect(file.meta.description).toBe("Test Triangle");
+    expect(file.meta.author).toBe("Test");
   });
 });

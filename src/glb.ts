@@ -22,12 +22,10 @@ const COMPONENT_UINT16 = 5123;
 const TARGET_ARRAY_BUFFER         = 34962;
 const TARGET_ELEMENT_ARRAY_BUFFER = 34963;
 const TRIANGLES = 4;
-const UNSIGNED_SHORT = 5123;
-const UNSIGNED_INT   = 5125;
 
 // ── Material helpers ──────────────────────────────────────────
 
-function colorToGltfMaterial(color: LDrawColor, index: number) {
+function colorToGltfMaterial(color: LDrawColor) {
   const [r, g, b, a] = color.rgba;
 
   const mat: Record<string, unknown> = {
@@ -43,12 +41,12 @@ function colorToGltfMaterial(color: LDrawColor, index: number) {
   };
 
   if (color.isTransparent) {
-    mat.alphaMode = a < 0.99 ? "BLEND" : "MASK";
-    mat.alphaCutoff = 0.5;
+    (mat as Record<string, unknown>)["alphaMode"] = a < 0.99 ? "BLEND" : "MASK";
+    (mat as Record<string, unknown>)["alphaCutoff"] = 0.5;
   }
 
   if (color.luminance > 0) {
-    mat.emissiveFactor = [r * color.luminance / 255, g * color.luminance / 255, b * color.luminance / 255];
+    (mat as Record<string, unknown>)["emissiveFactor"] = [r * color.luminance / 255, g * color.luminance / 255, b * color.luminance / 255];
   }
 
   return mat;
@@ -58,13 +56,6 @@ function colorToGltfMaterial(color: LDrawColor, index: number) {
 
 function align4(n: number): number {
   return Math.ceil(n / 4) * 4;
-}
-
-function writeUint32LE(buf: Uint8Array, offset: number, value: number) {
-  buf[offset]     = value & 0xff;
-  buf[offset + 1] = (value >> 8)  & 0xff;
-  buf[offset + 2] = (value >> 16) & 0xff;
-  buf[offset + 3] = (value >> 24) & 0xff;
 }
 
 function concatBuffers(buffers: Uint8Array[]): Uint8Array {
@@ -118,7 +109,7 @@ export function generateGlb(
     if (!colorIndexMap.has(mesh.colorCode)) {
       colorIndexMap.set(mesh.colorCode, materials.length);
       const color = geometry.colorTable?.get(mesh.colorCode);
-      materials.push(colorToGltfMaterial(color!, materials.length));
+      materials.push(colorToGltfMaterial(color!));
     }
   }
 
@@ -168,8 +159,8 @@ export function generateGlb(
       count:         data.length / (type === "VEC3" ? 3 : type === "VEC2" ? 2 : 1),
       type,
     };
-    if (min) acc.min = min;
-    if (max) acc.max = max;
+    if (min) (acc as Record<string, unknown>)["min"] = min;
+    if (max) (acc as Record<string, unknown>)["max"] = max;
     accessors.push(acc);
     return idx;
   }
@@ -285,15 +276,14 @@ export function generateGlb(
 
     if (normals) {
       const normAccessor = addFloat32Accessor(normals, "VEC3");
-      attributes.NORMAL = normAccessor;
+      (attributes as Record<string, number>)["NORMAL"] = normAccessor;
     }
 
     if (uvs_buf) {
       const uvAccessor = addFloat32Accessor(uvs_buf, "VEC2");
-      attributes.TEXCOORD_0 = uvAccessor;
+      (attributes as Record<string, number>)["TEXCOORD_0"] = uvAccessor;
     }
 
-    const color = geometry.colorTable?.get(mesh.colorCode);
     const materialIdx = colorIndexMap.get(mesh.colorCode) ?? 0;
 
     primitives.push({

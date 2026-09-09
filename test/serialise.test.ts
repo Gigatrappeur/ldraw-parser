@@ -17,7 +17,8 @@ import {
   rotationToMatrix,
 } from "../src/steps";
 import { parseLDrawFile, LDrawParser } from "../src/index";
-import { buildColorTable } from "../src/colors";
+import { buildColorTable } from "./color-table";
+import { createTestResolver } from "./test-resolver";
 import type { LDrawSubFileRef, LDrawTriangle } from "../src/types";
 import { IDENTITY } from "../src/utils";
 
@@ -519,7 +520,7 @@ describe("Step geometry integration", () => {
 0 STEP`.trim();
 
   test("cumulative geometry grows with each step", async () => {
-    const parser = new LDrawParser();
+    const parser = new LDrawParser({ resolveFile: createTestResolver() });
     const { file } = await parser.parse(ASSEMBLY, "assembly.ldr");
     const steps = extractSteps(file);
     expect(steps).toHaveLength(3);

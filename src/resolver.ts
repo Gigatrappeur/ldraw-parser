@@ -4,7 +4,7 @@
 
 import {
   type LDrawFile,
-  type LDrawSubFileRef,
+  // type LDrawSubFileRef,
   type LDrawColor,
   type Matrix4,
   type FlatGeometry,
@@ -25,10 +25,6 @@ import {
   aabbFinalize,
   projectTexmap,
 } from "./utils";
-import {
-  resolveColor,
-  isMetaColorCode,
-} from "./colors";
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -47,14 +43,17 @@ function meshKey(k: MeshKey): string {
  * Resolve a sub-file reference.
  * Returns the parsed LDrawFile (from cache if already seen).
  */
-async function resolveSubFile(
-  ref: LDrawSubFileRef,
+async function resolveFile(
+  // ref: LDrawSubFileRef,
+  filename: string,
   ctx: ResolverContext,
 ): Promise<LDrawFile | null> {
-  const key = normalizeFileName(ref.file);
+  const key = normalizeFileName(filename);
   if (ctx.cache.has(key)) return ctx.cache.get(key)!;
 
-  const content = await ctx.resolveFile(ref.file);
+  const content = await ctx.resolveFile(filename);
+
+
   if (!content) return null;
 
   const file = parseLDrawFile(content, key);
@@ -63,7 +62,8 @@ async function resolveSubFile(
   // Register any embedded colours from the file into the table
   if (file.meta.colors) {
     for (const c of file.meta.colors) {
-      if (!ctx.colorTable.has(c.code)) ctx.colorTable.set(c.code, c);
+      ctx.colorTable.add(c);
+      // if (!ctx.colorTable.has(c.code)) ctx.colorTable.set(c.code, c);
     }
   }
 
@@ -87,7 +87,7 @@ async function resolveSubFile(
 async function flattenFile(
   file: LDrawFile,
   matrix: Matrix4,
-  parentColor: LDrawColor | undefined,
+  parentColor: LDrawColor,
   invertWinding: boolean,
   depth: number,
   meshMap: Map<string, GeometryMesh>,
@@ -107,14 +107,12 @@ async function flattenFile(
   for (const cmd of file.commands) {
     // ── Type 1 – sub-file reference ──────────────────────────
     if (cmd.type === 1) {
-      const ref = cmd as LDrawSubFileRef;
+      const ref = cmd;
       const childMatrix = multiplyMatrices(matrix, ref.transform);
       const childInvert = ref.inverted ? !localInvert : localInvert;
 
       // Resolve colour for child
-      const refColor = isMetaColorCode(ref.colorCode)
-        ? parentColor
-        : resolveColor(ref.colorCode, ctx.colorTable, parentColor);
+      const refColor = await ctx.colorTable.resolveColor(ref.colorCode, parentColor);
 
       // Try MPD embedded sub-files first
       const normalised = normalizeFileName(ref.file);
@@ -122,13 +120,15 @@ async function flattenFile(
 
       // Then external resolver
       if (!childFile) {
-        childFile = await resolveSubFile(ref, ctx);
+        childFile = await resolveFile(ref.file, ctx);
       }
 
       if (childFile) {
         // Inherit file-level colours into table
         if (childFile.meta.colors) {
-          for (const c of childFile.meta.colors) ctx.colorTable.set(c.code, c);
+          for (const c of childFile.meta.colors) {
+            ctx.colorTable.add(c)
+          }
         }
         await flattenFile(
           childFile,
@@ -146,7 +146,7 @@ async function flattenFile(
 
     // ── Types 3 & 4 – triangles / quads ─────────────────────
     if (cmd.type === 3 || cmd.type === 4) {
-      const color = resolveColor(cmd.colorCode, ctx.colorTable, parentColor);
+      const color = await ctx.colorTable.resolveColor(cmd.colorCode, parentColor);
       const texmap = cmd.texmap;
       const key = meshKey({ colorCode: color.code, texmapTexture: texmap?.texture });
 
@@ -190,7 +190,7 @@ async function flattenFile(
 
     // ── Type 2 & 5 – edges / optional lines ─────────────────
     if (cmd.type === 2 || cmd.type === 5) {
-      const color = resolveColor(cmd.colorCode, ctx.colorTable, parentColor);
+      const color = await ctx.colorTable.resolveColor(cmd.colorCode, parentColor);
       const key = `edge::${color.code}`;
       if (!edgeMap.has(key)) {
         edgeMap.set(key, { colorCode: color.code, segments: [] });
@@ -214,7 +214,7 @@ async function flattenFile(
 export async function flattenGeometry(
   file: LDrawFile,
   ctx: ResolverContext,
-  defaultColor?: LDrawColor,
+  defaultColor: LDrawColor,
 ): Promise<FlatGeometry> {
   const meshMap = new Map<string, GeometryMesh>();
   const edgeMap = new Map<string, GeometryEdges>();
@@ -236,11 +236,11 @@ export async function flattenGeometry(
   // Build a color table limited to only the colors used by the meshes/edges
   const usedColorTable = new Map<number, LDrawColor>();
   for (const mesh of meshes) {
-    const c = ctx.colorTable.get(mesh.colorCode);
+    const c = await ctx.colorTable.get(mesh.colorCode);
     if (c) usedColorTable.set(mesh.colorCode, c);
   }
   for (const edge of edges) {
-    const c = ctx.colorTable.get(edge.colorCode);
+    const c = await ctx.colorTable.get(edge.colorCode);
     if (c) usedColorTable.set(edge.colorCode, c);
   }
 
@@ -267,20 +267,28 @@ export async function flattenGeometry(
  * Returns both the structured LDrawFile and (if flatten=true) a FlatGeometry.
  */
 export async function loadLDrawModel(
-  content: string,
+  // content: string,
   name: string,
   ctx: ResolverContext,
   flatten = true,
-  defaultColor?: LDrawColor,
+  defaultColor: LDrawColor,
 ): Promise<{ file: LDrawFile; geometry?: FlatGeometry }> {
-  const file = parseLDrawFile(content, name);
+  // const file = parseLDrawFile(content, name);
+  const file = await resolveFile(name, ctx); // Preload the file into cache
+  if (!file) {
+    throw new Error(`Fichier introuvable: ${name}`);
+  }
 
   // Register file-level colours
   if (file.meta.colors) {
-    for (const c of file.meta.colors) ctx.colorTable.set(c.code, c);
+    for (const c of file.meta.colors) {
+      ctx.colorTable.add(c);
+    }
   }
 
-  if (!flatten) return { file };
+  if (!flatten) {
+    return { file };
+  }
 
   // ── MPD root detection ────────────────────────────────────
   // A standard MPD file's geometry lives entirely inside embedded
@@ -295,7 +303,7 @@ export async function loadLDrawModel(
     for (const [subName, subFile] of file.subFiles) {
       ctx.cache.set(subName, subFile);
       if (subFile.meta.colors) {
-        for (const c of subFile.meta.colors) ctx.colorTable.set(c.code, c);
+        for (const c of subFile.meta.colors) ctx.colorTable.add(c);
       }
     }
 

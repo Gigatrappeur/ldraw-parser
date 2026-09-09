@@ -60,6 +60,7 @@ async function getDirIndex(dir: string): Promise<Map<string, string>> {
  * Returns the full path if found, null otherwise.
  */
 async function resolveInDir(dir: string, name: string): Promise<string | null> {
+  console.log('resolveInDir', dir, name);
   const normalised = name.replace(/\\/g, "/").toLowerCase();
 
   // If the name itself contains sub-directory components (e.g. "s/stud4.dat")
@@ -68,6 +69,7 @@ async function resolveInDir(dir: string, name: string): Promise<string | null> {
 
   let current = dir;
   for (let i = 0; i < segments.length; i++) {
+    console.log('resolveInDir', current, segments[i]);
     const seg = segments[i];
     if (!seg) continue;
     const idx = await getDirIndex(current);
@@ -142,10 +144,13 @@ export function createFilesystemResolver(
     ...LDRAW_SEARCH_DIRS.map((sub) => sub ? join(root, sub) : root),
   ];
 
+  console.log('FileResolver', root, extraPaths, searchDirs);
   return async (name: string): Promise<string | null> => {
+    console.log('resolveFile', name);
     const cacheKey = name.replace(/\\/g, "/").toLowerCase();
 
     if (useCache && contentCache.has(cacheKey)) {
+      console.log('Using cache for:', cacheKey);
       return contentCache.get(cacheKey)!;
     }
 
@@ -159,7 +164,7 @@ export function createFilesystemResolver(
         return content;
       }
     }
-
+    console.log('resolveFile - non trouvé');
     return null;
   };
 }

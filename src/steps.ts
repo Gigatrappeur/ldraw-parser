@@ -175,9 +175,15 @@ export async function generateStepGeometries(
       commands: [...cumulativeCommands],
     };
 
+    const defaultColor = ctx.colorTable.get(71) ?? {
+      code: 71, name: "Light Bluish Grey", value: 0x808080, edge: 0x595959,
+      alpha: 255, luminance: 0, finish: "NORMAL", isTransparent: false,
+      rgba: [0.502, 0.502, 0.502, 1], edgeRgba: [0.35, 0.35, 0.35, 1], hex: "#808080",
+    };
+
     const [stepGeo, cumulativeGeo] = await Promise.all([
-      flattenGeometry(stepFile, ctx),
-      flattenGeometry(cumulativeFile, ctx),
+      flattenGeometry(stepFile, ctx, defaultColor),
+      flattenGeometry(cumulativeFile, ctx, defaultColor),
     ]);
 
     results.push({ step, stepGeo, cumulativeGeo });

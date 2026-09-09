@@ -21,8 +21,9 @@ import {
   MM_PER_LDU,
 } from "../src/postprocess";
 import { LDrawParser } from "../src/index";
-import type { GeometryMesh, FlatGeometry, LDrawColor, Vec3 } from "../src/types";
-import { buildColorTable } from "../src/colors";
+import type { GeometryMesh, FlatGeometry, Vec3 } from "../src/types";
+import { buildColorTable, LDrawColor } from "./color-table";
+import { createTestResolver } from "./test-resolver";
 
 // ─────────────────────────────────────────────────────────────
 // Fixtures
@@ -40,7 +41,7 @@ function makeVec(x: number, y: number, z: number): Vec3 { return { x, y, z }; }
 function makeMesh(
   triangles: Array<[Vec3, Vec3, Vec3]>,
   colorCode = 4,
-  color: LDrawColor = RED_COLOR,
+  _color: LDrawColor = RED_COLOR,
 ): GeometryMesh {
   return {
     colorCode,
@@ -690,7 +691,7 @@ describe("Full pipeline: parse → weld → GLB → JSON", () => {
 `.trim();
 
   test("parse produces geometry", async () => {
-    const parser = new LDrawParser();
+    const parser = new LDrawParser({ resolveFile: createTestResolver() });
     const { geometry } = await parser.parse(CUBE_LDR, "cube.dat");
     expect(geometry).toBeDefined();
     const stats = computeStats(geometry!);
@@ -698,7 +699,7 @@ describe("Full pipeline: parse → weld → GLB → JSON", () => {
   });
 
   test("GLB output is valid after full pipeline", async () => {
-    const parser = new LDrawParser();
+    const parser = new LDrawParser({ resolveFile: createTestResolver() });
     const { geometry } = await parser.parse(CUBE_LDR, "cube.dat");
     const scale = lduToUnitScale("m");
     const geo = mergeGeometry(transformGeometry(geometry!, scale, true));

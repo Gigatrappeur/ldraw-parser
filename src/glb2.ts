@@ -102,7 +102,7 @@ function flatToWelded(mesh: GeometryMesh): WeldedMesh {
 
 function buildMaterial(color: LDrawColor, textureIndex: number | null, opts: GlbOptionsV2): Record<string, unknown> {
   const r = color.rgba[0] ?? 0, g = color.rgba[1] ?? 0, b = color.rgba[2] ?? 0, a = color.rgba[3] ?? 1;
-  const pbr: Record<string, unknown> = { baseColorFactor: [r, g, b, a], metallicFactor: 0, roughnessFactor: 0.8 };
+  const pbr: { baseColorFactor: number[]; metallicFactor: number; roughnessFactor: number; baseColorTexture?: { index: number } } = { baseColorFactor: [r, g, b, a], metallicFactor: 0, roughnessFactor: 0.8 };
   if (textureIndex !== null) pbr.baseColorTexture = { index: textureIndex };
   switch (color.finish) {
     case "CHROME":        pbr.metallicFactor = 1.0; pbr.roughnessFactor = 0.03; break;
@@ -111,7 +111,7 @@ function buildMaterial(color: LDrawColor, textureIndex: number | null, opts: Glb
     case "RUBBER":        pbr.metallicFactor = 0.0; pbr.roughnessFactor = 0.95; break;
     case "MATTE_METALLIC":pbr.metallicFactor = 0.8; pbr.roughnessFactor = 0.60; break;
   }
-  const mat: Record<string, unknown> = { name: color.name, pbrMetallicRoughness: pbr, doubleSided: true };
+  const mat: { name: string; pbrMetallicRoughness: { baseColorFactor: number[]; metallicFactor: number; roughnessFactor: number; baseColorTexture?: { index: number } }; doubleSided: boolean; emissiveFactor?: number[]; extensions?: { KHR_materials_transmission?: { transmissionFactor: number } }; alphaMode?: string; alphaCutoff?: number } = { name: color.name, pbrMetallicRoughness: pbr, doubleSided: true };
   if (color.luminance > 0) {
     const lf = color.luminance / 255;
     mat.emissiveFactor = [r * lf, g * lf, b * lf];
@@ -166,7 +166,7 @@ function addBV(ctx: Ctx, data: Uint8Array, target: number): number {
 function addAcc(ctx: Ctx, bv: number, ct: number, count: number, type: string, min?: number[], max?: number[]): number {
   const i = ctx.accessors.length;
   const a: Record<string, unknown> = { bufferView: bv, componentType: ct, count, type };
-  if (min) a.min = min; if (max) a.max = max;
+  if (min) (a as Record<string, unknown>)["min"] = min; if (max) (a as Record<string, unknown>)["max"] = max;
   ctx.accessors.push(a); return i;
 }
 
@@ -214,7 +214,7 @@ export async function generateGlbV2(geometry: FlatGeometry, opts: GlbOptionsV2 =
     const texIdx = mesh.texmap?.texture ? (texMap.get(mesh.texmap.texture) ?? null) : null;
     const color = geometry.colorTable?.get(mesh.colorCode);
     const mat = buildMaterial(color!, texIdx, opts);
-    const ext = mat.extensions as Record<string, unknown> | undefined;
+    const ext = (mat as Record<string, unknown>)["extensions"] as Record<string, unknown> | undefined;
     if (ext) for (const k of Object.keys(ext)) ctx.exts.add(k);
     colMatMap.set(mesh.colorCode, ctx.materials.length);
     ctx.materials.push(mat);
@@ -243,11 +243,11 @@ export async function generateGlbV2(geometry: FlatGeometry, opts: GlbOptionsV2 =
     const attr: Record<string, number> = { POSITION: posAcc };
     if (normals) {
       const bv = addBV(ctx, new Uint8Array(wm.normals.buffer, wm.normals.byteOffset, wm.normals.byteLength), ARRAY_BUF);
-      attr.NORMAL = addAcc(ctx, bv, FLOAT, vc, "VEC3");
+      attr["NORMAL"] = addAcc(ctx, bv, FLOAT, vc, "VEC3");
     }
     if (uvs && wm.uvs) {
       const bv = addBV(ctx, new Uint8Array(wm.uvs.buffer, wm.uvs.byteOffset, wm.uvs.byteLength), ARRAY_BUF);
-      attr.TEXCOORD_0 = addAcc(ctx, bv, FLOAT, vc, "VEC2");
+      attr["TEXCOORD_0"] = addAcc(ctx, bv, FLOAT, vc, "VEC2");
     }
     ctx.primitives.push({ attributes: attr, indices: idxAcc, material: colMatMap.get(wm.colorCode) ?? 0, mode: TRIANGLES });
   }
@@ -261,10 +261,10 @@ export async function generateGlbV2(geometry: FlatGeometry, opts: GlbOptionsV2 =
     materials: ctx.materials, accessors: ctx.accessors, bufferViews: ctx.bufferViews,
     buffers: [{ byteLength: binData.byteLength }],
   };
-  if (ctx.textures.length) gltf.textures = ctx.textures;
-  if (ctx.images.length)   gltf.images   = ctx.images;
-  if (ctx.samplers.length) gltf.samplers = ctx.samplers;
-  if (ctx.exts.size)       gltf.extensionsUsed = [...ctx.exts];
+  if (ctx.textures.length) gltf["textures"] = ctx.textures;
+  if (ctx.images.length)   gltf["images"]   = ctx.images;
+  if (ctx.samplers.length) gltf["samplers"] = ctx.samplers;
+  if (ctx.exts.size)       gltf["extensionsUsed"] = [...ctx.exts];
 
   const jb  = new TextEncoder().encode(JSON.stringify(gltf));
   const jp  = align4(jb.length);

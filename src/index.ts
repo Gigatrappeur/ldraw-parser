@@ -36,8 +36,8 @@ export {
 
 // ── High-level convenience class ─────────────────────────────
 
-import { type LDrawParserOptions, type ResolverContext, type FlatGeometry, type LDrawFile, type LDrawColor } from "./types";
-import { buildColorTable, getDefaultColorTable, getDefaultParentColor } from "./colors";
+import { type LDrawParserOptions, type ResolverContext, type FlatGeometry, type LDrawFile } from "./types";
+import { ColorTable } from "./colors";
 import { parseLDrawFile } from "./parser";
 import { loadLDrawModel } from "./resolver";
 import { generateSvgThumbnail, type SvgCameraOptions } from "./svg";
@@ -53,6 +53,7 @@ import {
   type GeometryStats,
   type ColorUsage,
 } from "./postprocess";
+import { SimpleFileResolver } from "./simple-resolver";
 
 export class LDrawParser {
   private ctx: ResolverContext;
@@ -60,39 +61,45 @@ export class LDrawParser {
     flatten: boolean;
     keepRawLines: boolean;
   };
-  private defaultColor: LDrawColor;
+  private defaultColor: number//LDrawColor;
 
-  constructor(options: LDrawParserOptions = {}) {
+  constructor(options: LDrawParserOptions) {
     
     this.opts = {
       flatten:       options.flatten       ?? true,
       keepRawLines:  options.keepRawLines  ?? false
     };
 
-    const colorTable = options.colorTable ?? getDefaultColorTable();
-    this.defaultColor =
-      options.defaultColor ??
-      getDefaultParentColor(colorTable);
+    const resolver = 'resolveFile' in options ? options.resolveFile : new SimpleFileResolver(options.libraryRoot).resolve;
+
+    // resolveFile
+    // buildColorTable('LDConfig.ldr')
+
+    // const colorTable = options.colorTable ?? getDefaultColorTable();
+    // this.defaultColor =
+    //   options.defaultColor ??
+    //   getDefaultParentColor(colorTable);
+    this.defaultColor = options.defaultColor ?? 71; // Light Bluish Grey
     
     this.ctx = {
-      colorTable,
-      resolveFile: options.resolveFile ?? ((_: string) => Promise.resolve(null)),
+      colorTable: new ColorTable(resolver),
+      resolveFile: resolver,
       processBFC: options.processBFC ?? true,
       maxDepth: options.maxDepth ?? 64,
       cache: new Map(),
     };
   }
 
-  /**
-   * Load an LDConfig.ldr content to populate the full official colour table.
-   * Call this once before parsing models if you have the file available.
-   */
-  loadColorTable(ldconfigContent: string): void {
-    const table = buildColorTable(ldconfigContent);
-    for (const [code, color] of table) {
-      this.ctx.colorTable.set(code, color);
-    }
-  }
+  // /**
+  //  * Load an LDConfig.ldr content to populate the full official colour table.
+  //  * Call this once before parsing models if you have the file available.
+  //  */
+  // loadColorTable(ldconfigContent: string): void {
+  //   const table = buildColorTable(ldconfigContent);
+  //   for (const [code, color] of table) {
+  //     this.ctx.colorTable.set(code, color);
+  //   }
+  // }
 
   /**
    * Parse and resolve an LDraw model.
@@ -101,16 +108,15 @@ export class LDrawParser {
    * @param name    – file name (used for cache key and MPD sub-file matching)
    */
   async parse(
-    content: string,
+    // content: string,
     name = "model.ldr",
-    ctxOverride?: Partial<ResolverContext>
+    ctxOverride?: { defaultColor?: number }
   ): Promise<{ file: LDrawFile; geometry?: FlatGeometry }> {
     return loadLDrawModel(
-      content,
-      normalizeFileName(name),
-      { ...this.ctx, ...ctxOverride },
+      name,
+      this.ctx,
       this.opts.flatten,
-      this.defaultColor,
+      await this.ctx.colorTable.get(ctxOverride?.defaultColor ?? this.defaultColor),
     );
   }
 
@@ -177,32 +183,31 @@ export class LDrawParser {
     return collectTextures(geometry);
   }
 
-  /**
-   * One-shot: parse → resolve → generate SVG thumbnail.
-   */
-  async toSvgFromContent(
-    content: string,
-    name?: string,
-    svgOptions?: SvgCameraOptions,
-  ): Promise<string> {
-    const { geometry } = await this.parse(content, name);
-    if (!geometry) throw new Error("Geometry flattening was disabled");
-    return this.toSvg(geometry, svgOptions);
-  }
+  // /**
+  //  * One-shot: parse → resolve → generate SVG thumbnail.
+  //  */
+  // async toSvgFromContent(
+  //   name: string,
+  //   svgOptions?: SvgCameraOptions,
+  // ): Promise<string> {
+  //   const { geometry } = await this.parse(name);
+  //   if (!geometry) throw new Error("Geometry flattening was disabled");
+  //   return this.toSvg(geometry, svgOptions);
+  // }
 
-  /**
-   * One-shot: parse → resolve → generate GLB.
-   */
-  async toGlbFromContent(
-    content: string,
-    name?: string,
-    glbOptions?: GlbOptions,
-    unit: LengthUnit = "m",
-  ): Promise<Uint8Array> {
-    const { geometry } = await this.parse(content, name);
-    if (!geometry) throw new Error("Geometry flattening was disabled");
-    return this.toGlb(geometry, glbOptions, unit);
-  }
+  // /**
+  //  * One-shot: parse → resolve → generate GLB.
+  //  */
+  // async toGlbFromContent(
+  //   content: string,
+  //   name?: string,
+  //   glbOptions?: GlbOptions,
+  //   unit: LengthUnit = "m",
+  // ): Promise<Uint8Array> {
+  //   const { geometry } = await this.parse(content, name);
+  //   if (!geometry) throw new Error("Geometry flattening was disabled");
+  //   return this.toGlb(geometry, glbOptions, unit);
+  // }
 
   /** Clear the internal sub-file cache. */
   clearCache(): void {
@@ -210,7 +215,7 @@ export class LDrawParser {
   }
 
   /** Read-only access to the colour table. */
-  get colorTable(): Map<number, LDrawColor> {
+  get colorTable(): ColorTable {
     return this.ctx.colorTable;
   }
 }

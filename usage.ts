@@ -68,7 +68,7 @@ if (ldconfig) {
 // 3. Parse an LDR model file
 // ─────────────────────────────────────────────────────────────
 
-async function parseModel(ldrPath: string) {
+export async function parseModel(ldrPath: string) {
   const content = await Bun.file(ldrPath).text();
   const { file, geometry } = await parser.parse(content, ldrPath);
 
@@ -119,7 +119,7 @@ async function parseModel(ldrPath: string) {
 // 4. Generate SVG thumbnail
 // ─────────────────────────────────────────────────────────────
 
-async function saveSvg(geometry: FlatGeometry, outPath: string) {
+export async function saveSvg(geometry: FlatGeometry, outPath: string) {
   const svg = parser.toSvg(geometry, {
     azimuth:    45,
     elevation:  30,
@@ -137,7 +137,7 @@ async function saveSvg(geometry: FlatGeometry, outPath: string) {
 // 5. Generate GLB file
 // ─────────────────────────────────────────────────────────────
 
-async function saveGlb(geometry: FlatGeometry, outPath: string) {
+export async function saveGlb(geometry: FlatGeometry, outPath: string) {
   const glb = parser.toGlb(geometry, {
     normals: true,
     uvs:     true,
@@ -279,6 +279,7 @@ await demonstrateMpd();
 extractMetadataOnly(SAMPLE_MPD);
 
 // Uncomment to test with a real LDraw file:
+// import { parseModel, saveSvg, saveGlb } from "./usage";
 // const { file, geometry } = await parseModel("path/to/model.ldr");
 // if (geometry) {
 //   await saveSvg(geometry, "output/thumbnail.svg");
