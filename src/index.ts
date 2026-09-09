@@ -10,272 +10,148 @@ export { flattenGeometry, loadLDrawModel } from "./resolver";
 export { generateSvgThumbnail, type SvgCameraOptions } from "./svg";
 export { generateGlb, type GlbOptions } from "./glb";
 export {
-  createFilesystemResolver,
-  createProjectResolver,
-  loadLdConfig,
-  warmResolverCache,
-  type LDrawLibraryOptions,
+	createFilesystemResolver,
+	createProjectResolver,
+	loadLdConfig,
+	warmResolverCache,
+	type LDrawLibraryOptions,
 } from "./fs-resolver";
 export {
-  lduToUnitScale,
-  transformGeometry,
-  mergeMeshesByColor,
-  mergeEdgesByColor,
-  mergeGeometry,
-  extractColorPalette,
-  computeStats,
-  cullSmallTriangles,
-  collectTextures,
-  LDU_PER_MM,
-  MM_PER_LDU,
-  STUDS_PER_LDU,
-  type LengthUnit,
-  type ColorUsage,
-  type GeometryStats,
+	lduToUnitScale,
+	transformGeometry,
+	mergeMeshesByColor,
+	mergeEdgesByColor,
+	mergeGeometry,
+	extractColorPalette,
+	computeStats,
+	cullSmallTriangles,
+	collectTextures,
+	LDU_PER_MM,
+	MM_PER_LDU,
+	STUDS_PER_LDU,
+	type LengthUnit,
+	type ColorUsage,
+	type GeometryStats,
 } from "./postprocess";
 
 // ── High-level convenience class ─────────────────────────────
 
-import { type LDrawParserOptions, type ResolverContext, type FlatGeometry, type LDrawFile } from "./types";
+import { type LDrawParserOptions, type ResolverContext } from "./types";
 import { ColorTable } from "./colors";
-import { parseLDrawFile } from "./parser";
-import { loadLDrawModel } from "./resolver";
-import { generateSvgThumbnail, type SvgCameraOptions } from "./svg";
-import { generateGlb, type GlbOptions } from "./glb";
-import { normalizeFileName } from "./utils";
-import {
-  transformGeometry,
-  mergeGeometry,
-  computeStats,
-  extractColorPalette,
-  collectTextures,
-  type LengthUnit,
-  type GeometryStats,
-  type ColorUsage,
-} from "./postprocess";
+import { LDrawPart, loadLDrawModel } from "./resolver";
 import { SimpleFileResolver } from "./simple-resolver";
 
 export class LDrawParser {
-  private ctx: ResolverContext;
-  private opts: {
-    flatten: boolean;
-    keepRawLines: boolean;
-  };
-  private defaultColor: number//LDrawColor;
+	private ctx: ResolverContext;
+	private opts: {
+		flatten: boolean;
+		keepRawLines: boolean;
+	};
+	private defaultColor: number//LDrawColor;
 
-  constructor(options: LDrawParserOptions) {
-    
-    this.opts = {
-      flatten:       options.flatten       ?? true,
-      keepRawLines:  options.keepRawLines  ?? false
-    };
+	constructor(options: LDrawParserOptions) {
 
-    const resolver = 'resolveFile' in options ? options.resolveFile : new SimpleFileResolver(options.libraryRoot).resolve;
+		this.opts = {
+			flatten: options.flatten ?? true,
+			keepRawLines: options.keepRawLines ?? false
+		};
 
-    // resolveFile
-    // buildColorTable('LDConfig.ldr')
+		const resolver = 'resolveFile' in options ? options.resolveFile : new SimpleFileResolver(options.libraryRoot).resolve;
 
-    // const colorTable = options.colorTable ?? getDefaultColorTable();
-    // this.defaultColor =
-    //   options.defaultColor ??
-    //   getDefaultParentColor(colorTable);
-    this.defaultColor = options.defaultColor ?? 71; // Light Bluish Grey
-    
-    this.ctx = {
-      colorTable: new ColorTable(resolver),
-      resolveFile: resolver,
-      processBFC: options.processBFC ?? true,
-      maxDepth: options.maxDepth ?? 64,
-      cache: new Map(),
-    };
-  }
+		this.defaultColor = options.defaultColor ?? 71; // Light Bluish Grey
 
-  // /**
-  //  * Load an LDConfig.ldr content to populate the full official colour table.
-  //  * Call this once before parsing models if you have the file available.
-  //  */
-  // loadColorTable(ldconfigContent: string): void {
-  //   const table = buildColorTable(ldconfigContent);
-  //   for (const [code, color] of table) {
-  //     this.ctx.colorTable.set(code, color);
-  //   }
-  // }
+		this.ctx = {
+			colorTable: new ColorTable(resolver),
+			resolveFile: resolver,
+			processBFC: options.processBFC ?? true,
+			maxDepth: options.maxDepth ?? 64,
+			cache: new Map(),
+		};
+	}
 
-  /**
-   * Parse and resolve an LDraw model.
-   *
-   * @param content – raw .ldr / .mpd / .dat file content
-   * @param name    – file name (used for cache key and MPD sub-file matching)
-   */
-  async parse(
-    // content: string,
-    name = "model.ldr",
-    ctxOverride?: { defaultColor?: number }
-  ): Promise<{ file: LDrawFile; geometry?: FlatGeometry }> {
-    return loadLDrawModel(
-      name,
-      this.ctx,
-      this.opts.flatten,
-      await this.ctx.colorTable.get(ctxOverride?.defaultColor ?? this.defaultColor),
-    );
-  }
 
-  /**
-   * Parse only (no sub-file resolution, no geometry flattening).
-   * Useful for quick metadata extraction.
-   */
-  parseOnly(content: string, name = "model.ldr"): LDrawFile {
-    return parseLDrawFile(content, normalizeFileName(name), this.opts.keepRawLines);
-  }
+	/**
+	 * Parse and resolve an LDraw model.
+	 *
+	 * @param name    – file name (used for retrieve file in ldraw folder)
+	 */
+	async parse(name: string, ctxOverride?: { defaultColor?: number }): Promise<LDrawPart> {
+		return loadLDrawModel(
+			name,
+			this.ctx,
+			this.opts.flatten,
+			await this.ctx.colorTable.get(ctxOverride?.defaultColor ?? this.defaultColor),
+		)
+	}
 
-  /**
-   * Generate an SVG thumbnail string from already-flattened geometry.
-   */
-  toSvg(geometry: FlatGeometry, options?: SvgCameraOptions): string {
-    return generateSvgThumbnail(geometry, options);
-  }
 
-  /**
-   * Generate a GLB binary buffer from already-flattened geometry.
-   *
-   * @param unit   Output unit (default: "m" for glTF compliance)
-   * @param merge  Merge meshes by color before export (default: true)
-   */
-  toGlb(
-    geometry: FlatGeometry,
-    options?: GlbOptions,
-    unit: LengthUnit = "m",
-    merge = true,
-  ): Uint8Array {
-    const scale = unit === "ldu" ? 1 : this._lduScale(unit);
-    let g = transformGeometry(geometry, scale, true);
-    if (merge) g = mergeGeometry(g);
-    return generateGlb(g, options);
-  }
+	/** Clear the internal sub-file cache. */
+	clearCache(): void {
+		this.ctx.cache.clear();
+	}
 
-  /** LDU → output-unit scale factor */
-  private _lduScale(unit: LengthUnit): number {
-    // 1 LDU = 0.4 mm
-    const mm: Record<LengthUnit, number> = {
-      ldu: 1 / 0.4, mm: 1, cm: 0.1, m: 0.001, in: 1 / 25.4, studs: 1 / 8,
-    };
-    return 0.4 * (mm[unit] ?? 1);
-  }
-
-  /**
-   * Compute geometry statistics (triangle count, AABB, estimated memory…).
-   */
-  stats(geometry: FlatGeometry): GeometryStats {
-    return computeStats(geometry);
-  }
-
-  /**
-   * Extract the color palette used in the geometry, sorted by usage.
-   */
-  palette(geometry: FlatGeometry): ColorUsage[] {
-    return extractColorPalette(geometry);
-  }
-
-  /**
-   * List all texture file names referenced via TEXMAP.
-   */
-  textures(geometry: FlatGeometry): string[] {
-    return collectTextures(geometry);
-  }
-
-  // /**
-  //  * One-shot: parse → resolve → generate SVG thumbnail.
-  //  */
-  // async toSvgFromContent(
-  //   name: string,
-  //   svgOptions?: SvgCameraOptions,
-  // ): Promise<string> {
-  //   const { geometry } = await this.parse(name);
-  //   if (!geometry) throw new Error("Geometry flattening was disabled");
-  //   return this.toSvg(geometry, svgOptions);
-  // }
-
-  // /**
-  //  * One-shot: parse → resolve → generate GLB.
-  //  */
-  // async toGlbFromContent(
-  //   content: string,
-  //   name?: string,
-  //   glbOptions?: GlbOptions,
-  //   unit: LengthUnit = "m",
-  // ): Promise<Uint8Array> {
-  //   const { geometry } = await this.parse(content, name);
-  //   if (!geometry) throw new Error("Geometry flattening was disabled");
-  //   return this.toGlb(geometry, glbOptions, unit);
-  // }
-
-  /** Clear the internal sub-file cache. */
-  clearCache(): void {
-    this.ctx.cache.clear();
-  }
-
-  /** Read-only access to the colour table. */
-  get colorTable(): ColorTable {
-    return this.ctx.colorTable;
-  }
+	/** Read-only access to the colour table. */
+	get colorTable(): ColorTable {
+		return this.ctx.colorTable;
+	}
 }
 
 // ── Additional module re-exports ──────────────────────────────
 
 export {
-  createNodeResolver,
-  loadLdConfigNode,
-  warmNodeResolverCache,
-  type NodeResolverOptions,
+	createNodeResolver,
+	loadLdConfigNode,
+	warmNodeResolverCache,
+	type NodeResolverOptions,
 } from "./node-resolver";
 export {
-  smoothMeshNormals,
-  computeSmoothNormals,
-  type VertexWithNormal,
-  type SmoothTriangle,
-  type SmoothMesh,
-  type SmoothGeometry,
+	smoothMeshNormals,
+	computeSmoothNormals,
+	type VertexWithNormal,
+	type SmoothTriangle,
+	type SmoothMesh,
+	type SmoothGeometry,
 } from "./normals";
 export {
-  generateGlbV2,
-  type GlbOptionsV2,
+	generateGlbV2,
+	type GlbOptionsV2,
 } from "./glb2";
 export {
-  generateObj,
-  type ObjExportOptions,
-  type ObjExportResult,
+	generateObj,
+	type ObjExportOptions,
+	type ObjExportResult,
 } from "./obj";
 export {
-  LDrawError,
-  LDrawParseError,
-  LDrawResolveError,
-  LDrawDepthError,
-  type LDrawWarning,
-  type ParseResult,
+	LDrawError,
+	LDrawParseError,
+	LDrawResolveError,
+	LDrawDepthError,
+	type LDrawWarning,
+	type ParseResult,
 } from "./errors";
 export {
-  weldMesh,
-  weldGeometry,
-  mergeWeldedMeshes,
-  type WeldOptions,
-  type WeldedMesh,
+	weldMesh,
+	weldGeometry,
+	mergeWeldedMeshes,
+	type WeldOptions,
+	type WeldedMesh,
 } from "./weld";
 
 export {
-  serialiseLDrawFile,
-  serialiseColor,
-  buildLDrawFile,
-  buildMpd,
-  type SerialiseOptions,
-  type MinimalFileOptions,
+	serialiseLDrawFile,
+	serialiseColor,
+	buildLDrawFile,
+	buildMpd,
+	type SerialiseOptions,
+	type MinimalFileOptions,
 } from "./serialise";
 export {
-  extractSteps,
-  hasSteps,
-  generateStepGeometries,
-  rotationToMatrix,
-  computeCameraRotations,
-  type BuildStep,
-  type StepRotation,
-  type StepGeometry,
+	extractSteps,
+	hasSteps,
+	generateStepGeometries,
+	rotationToMatrix,
+	computeCameraRotations,
+	type BuildStep,
+	type StepRotation,
+	type StepGeometry,
 } from "./steps";

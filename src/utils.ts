@@ -3,6 +3,7 @@
 // ============================================================
 
 
+import type { LengthUnit } from "./postprocess";
 import type { TexmapDefinition, Matrix4, Vec3, Vec2 } from "./types";
 
 // ── Matrix helpers ────────────────────────────────────────────
@@ -222,3 +223,14 @@ export function projectTexmap(
 export function normalizeFileName(name: string): string {
   return name.replace(/\\/g, "/").toLowerCase().trim();
 }
+
+
+
+/**********************/
+export function lduScale(unit: LengthUnit): number {
+    // 1 LDU = 0.4 mm
+    const mm: Record<LengthUnit, number> = {
+      ldu: 1 / 0.4, mm: 1, cm: 0.1, m: 0.001, in: 1 / 25.4, studs: 1 / 8,
+    };
+    return 0.4 * (mm[unit] ?? 1);
+  }
