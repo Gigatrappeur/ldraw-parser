@@ -45,10 +45,15 @@ export interface GlbOptionsV2 {
    */
   loadTexture?: (name: string) => Promise<Uint8Array | null> | Uint8Array | null;
   /**
-   * Use KHR_materials_transmission for transparent parts (default: false).
-   * Produces glass-like refraction in Babylon.js, three.js, model-viewer, etc.
-   */
+    * Use KHR_materials_transmission for transparent parts (default: false).
+    * Produces glass-like refraction in Babylon.js, three.js, model-viewer, etc.
+    */
   transmission?: boolean;
+  /**
+   * Flip Y axis (Y-up to Y-down conversion). Use when LDraw parts appear
+   * upside-down in viewers that expect Y-down coordinates. (default: false)
+   */
+  flipY?: boolean;
 }
 
 // ── Utilities ─────────────────────────────────────────────────
@@ -95,7 +100,16 @@ function flatToWelded(mesh: GeometryMesh): WeldedMesh {
       idx[vi] = vi; vi++;
     }
   }
-  return { colorCode: mesh.colorCode, positions: pos, normals: nor, uvs, indices: idx, texmapTexture: mesh.texmap?.texture };
+  return { colorCode: mesh.colorCode, positions: pos, normals: nor, uvs, indices: idx, texmapTexture: mesh.texmap?.texture, texmapKey: mesh.texmap ? texmapKeyString(mesh.texmap) : undefined };
+}
+
+function texmapKeyString(t: { projection: string; texture: string; point1: {x:number;y:number;z:number}; point2: {x:number;y:number;z:number}; point3: {x:number;y:number;z:number}; angle?: number; angle1?: number; angle2?: number }): string {
+  const r = (n: number) => Math.round(n * 1e6) / 1e6;
+  const p = (v: {x:number;y:number;z:number}) => `${r(v.x)},${r(v.y)},${r(v.z)}`;
+  let k = `${t.projection}::${t.texture}::${p(t.point1)}::${p(t.point2)}::${p(t.point3)}`;
+  if (t.angle    !== undefined) k += `::${t.angle}`;
+  if (t.angle1 !== undefined) k += `::${t.angle1}::${t.angle2}`;
+  return k;
 }
 
 // ── Material builder ──────────────────────────────────────────
@@ -191,6 +205,15 @@ export async function generateGlbV2(geometry: FlatGeometry, opts: GlbOptionsV2 =
   const welded: WeldedMesh[] = wOpts !== null
     ? mergeWeldedMeshes(weldGeometry(geometry.meshes, wOpts))
     : geometry.meshes.map(flatToWelded);
+
+  // Flip Y axis if requested
+  if (opts.flipY) {
+    for (const m of welded) {
+      for (let i = 1; i < m.positions.length; i += 3) {
+        m.positions[i] = -m.positions[i];
+      }
+    }
+  }
 
   // Load textures
   const texMap = new Map<string, number>();

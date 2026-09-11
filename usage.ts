@@ -138,7 +138,7 @@ export async function saveSvg(geometry: FlatGeometry, outPath: string) {
 // ─────────────────────────────────────────────────────────────
 
 export async function saveGlb(geometry: FlatGeometry, outPath: string) {
-  const glb = parser.toGlb(geometry, {
+  const glb = await parser.toGlb(geometry, {
     normals: true,
     uvs:     true,
     name:    "LDrawModel",
@@ -254,7 +254,7 @@ export function createLDrawServer(port = 3000) {
         const name = url.searchParams.get("name") ?? "model.ldr";
         const { geometry } = await parser.parse(body, name);
         if (!geometry) return new Response("No geometry", { status: 400 });
-        const glb = parser.toGlb(geometry, { normals: true, uvs: true });
+        const glb = await parser.toGlb(geometry, { normals: true, uvs: true });
         return new Response(glb, {
           headers: {
             "Content-Type":        "model/gltf-binary",

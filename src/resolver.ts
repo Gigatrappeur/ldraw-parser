@@ -26,19 +26,25 @@ import {
 	projectTexmap,
 	lduScale,
 } from "./utils";
+import { generateGlb } from "./glb";
+import { generateGlbV2, type GlbOptionsV2 } from "./glb2";
 import { collectTextures, computeStats, extractColorPalette, mergeGeometry, transformGeometry, type ColorUsage, type GeometryStats, type LengthUnit } from "./postprocess";
-import { generateGlb, type GlbOptions } from "./glb";
 import { generateSvgThumbnail, type SvgCameraOptions } from "./svg";
 
 // ── Types ─────────────────────────────────────────────────────
 
-interface MeshKey {
-	colorCode: number;
-	texmapTexture?: string;
+function texmapKeyForMesh(texmap: FlatGeometry["meshes"][number]["texmap"]): string {
+	if (!texmap) return "";
+	const r = (n: number) => Math.round(n * 1e6) / 1e6;
+	const p = (v: { x: number; y: number; z: number }) => `${r(v.x)},${r(v.y)},${r(v.z)}`;
+	let k = `${texmap.projection}::${texmap.texture}::${p(texmap.point1)}::${p(texmap.point2)}::${p(texmap.point3)}`;
+	if ((texmap as any).angle    !== undefined) k += `::${(texmap as any).angle}`;
+	if ((texmap as any).angle1 !== undefined) k += `::${(texmap as any).angle1}::${(texmap as any).angle2}`;
+	return k;
 }
 
-function meshKey(k: MeshKey): string {
-	return `${k.colorCode}::${k.texmapTexture ?? ""}`;
+function meshKeyFull(colorCode: number, texmap: FlatGeometry["meshes"][number]["texmap"]): string {
+	return `${colorCode}::${texmapKeyForMesh(texmap)}`;
 }
 
 // ── Resolver ──────────────────────────────────────────────────
@@ -105,8 +111,9 @@ async function flattenFile(
 	const det = matrixDeterminant3(matrix);
 	const reflectionInvert = det < 0;
 
-	// Effective inversion = parent invert XOR reflection XOR … accumulated later
-	let localInvert = invertWinding !== reflectionInvert;
+	// Effective inversion only accounts for reflection in the composed matrix
+	// (parent symmetry is already baked into the child matrix)
+	let localInvert = reflectionInvert;
 
 	for (const cmd of file.commands) {
 		// ── Type 1 – sub-file reference ──────────────────────────
@@ -152,7 +159,7 @@ async function flattenFile(
 		if (cmd.type === 3 || cmd.type === 4) {
 			const color = await ctx.colorTable.resolveColor(cmd.colorCode, parentColor);
 			const texmap = cmd.texmap;
-			const key = meshKey({ colorCode: color.code, texmapTexture: texmap?.texture });
+			const key = meshKeyFull(color.code, texmap);
 
 			if (!meshMap.has(key)) {
 				meshMap.set(key, { colorCode: color.code, triangles: [], texmap });
@@ -227,20 +234,25 @@ export class LDrawPart {
 	 *
 	 * @param unit   Output unit (default: "m" for glTF compliance)
 	 * @param merge  Merge meshes by color before export (default: true)
+	 * @param version  GLB engine: "v2" (indexed, textures, PBR) or "v1" (flat, non-indexed)
 	 */
-	toGlb(
-		options?: GlbOptions,
+	async toGlb(
+		options?: GlbOptionsV2,
 		unit: LengthUnit = "m",
 		merge = true,
-	): Uint8Array {
+		version: "v1" | "v2" = "v2",
+	): Promise<Uint8Array> {
 		if (!this.geometry) {
 			throw new Error("No geometry available. Use LDrawParser.parse() with flatten=true to generate geometry.");
 		}
 		const scale = unit === "ldu" ? 1 : lduScale(unit);
 		let g = transformGeometry(this.geometry, scale, true);
 		if (merge) g = mergeGeometry(g);
-		
-		return generateGlb(g, {name: this.file.name, ...options});
+
+		if (version === "v1") {
+			return generateGlb(g, { name: this.file.name, ...options });
+		}
+		return await generateGlbV2(g, { name: this.file.name, ...options });
 	}
 
 

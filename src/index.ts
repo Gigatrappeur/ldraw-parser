@@ -40,6 +40,11 @@ import { type LDrawParserOptions, type ResolverContext } from "./types";
 import { ColorTable } from "./colors";
 import { LDrawPart, loadLDrawModel } from "./resolver";
 import { SimpleFileResolver } from "./simple-resolver";
+import { generateSvgThumbnail, type SvgCameraOptions } from "./svg";
+import { generateGlbV2, type GlbOptionsV2 } from "./glb2";
+import { generateObj, type ObjExportOptions } from "./obj";
+import { parseLDrawFile } from "./parser";
+import type { LDrawFile } from "./types";
 
 export class LDrawParser {
 	private ctx: ResolverContext;
@@ -93,6 +98,27 @@ export class LDrawParser {
 	/** Read-only access to the colour table. */
 	get colorTable(): ColorTable {
 		return this.ctx.colorTable;
+	}
+
+	/** Generate an SVG thumbnail from parsed geometry. */
+	toSvg(geometry: NonNullable<Awaited<ReturnType<typeof loadLDrawModel>>["geometry"]>, options?: SvgCameraOptions): string {
+		return generateSvgThumbnail(geometry, options ?? {});
+	}
+
+	/** Generate a GLB file from parsed geometry. */
+	async toGlb(geometry: NonNullable<Awaited<ReturnType<typeof loadLDrawModel>>["geometry"]>, options?: GlbOptionsV2): Promise<Uint8Array> {
+		return generateGlbV2(geometry, options ?? {});
+	}
+
+	/** Generate an OBJ file from parsed geometry. */
+	toObj(geometry: NonNullable<Awaited<ReturnType<typeof loadLDrawModel>>["geometry"]>, options?: ObjExportOptions): string {
+		const { obj, mtl } = generateObj(geometry, options ?? {});
+		return obj + "\n" + mtl;
+	}
+
+	/** Parse LDraw content string without resolving sub-files. */
+	parseOnly(content: string, name: string): LDrawFile {
+		return parseLDrawFile(content, name, false);
 	}
 }
 

@@ -128,7 +128,7 @@ export function mergeMeshesByColor(geometry: FlatGeometry): FlatGeometry {
 
   for (const mesh of geometry.meshes) {
     const key = mesh.texmap
-      ? `${mesh.colorCode}::${mesh.texmap.texture}`
+      ? `${mesh.colorCode}::${texmapKey(mesh.texmap)}`
       : `${mesh.colorCode}`;
 
     const existing = merged.get(key);
@@ -140,6 +140,18 @@ export function mergeMeshesByColor(geometry: FlatGeometry): FlatGeometry {
   }
 
   return { ...geometry, meshes: [...merged.values()] };
+}
+
+function texmapKey(t: FlatGeometry["meshes"][number]["texmap"]): string {
+  if (!t) return "";
+  const base = `${t.projection}::${t.texture}::${round(t.point1.x)},${round(t.point1.y)},${round(t.point1.z)}::${round(t.point2.x)},${round(t.point2.y)},${round(t.point2.z)}::${round(t.point3.x)},${round(t.point3.y)},${round(t.point3.z)}`;
+  if (t.projection === "CYLINDRICAL" && "angle" in t) return `${base}::${(t as any).angle}`;
+  if (t.projection === "SPHERICAL" && "angle1" in t) return `${base}::${(t as any).angle1}::${(t as any).angle2}`;
+  return base;
+}
+
+function round(n: number): number {
+  return Math.round(n * 1e6) / 1e6;
 }
 
 /**

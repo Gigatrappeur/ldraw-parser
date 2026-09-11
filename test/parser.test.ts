@@ -337,7 +337,7 @@ describe("GLB generator", () => {
   test("generates a Uint8Array", async () => {
     const p = makeParser();
     const { geometry } = await p.parse(SIMPLE_TRIANGLE, "test.dat");
-    const glb = p.toGlb(geometry!);
+    const glb = await p.toGlb(geometry!);
     expect(glb).toBeInstanceOf(Uint8Array);
     expect(glb.byteLength).toBeGreaterThan(100);
   });
@@ -345,7 +345,7 @@ describe("GLB generator", () => {
   test("GLB starts with glTF magic number", async () => {
     const p = makeParser();
     const { geometry } = await p.parse(SIMPLE_TRIANGLE, "test.dat");
-    const glb = p.toGlb(geometry!);
+    const glb = await p.toGlb(geometry!);
     const view = new DataView(glb.buffer);
     // 0x46546C67 = "glTF"
     expect(view.getUint32(0, true)).toBe(0x46546c67);
@@ -354,7 +354,7 @@ describe("GLB generator", () => {
   test("GLB version is 2", async () => {
     const p = makeParser();
     const { geometry } = await p.parse(SIMPLE_TRIANGLE, "test.dat");
-    const glb = p.toGlb(geometry!);
+    const glb = await p.toGlb(geometry!);
     const view = new DataView(glb.buffer);
     expect(view.getUint32(4, true)).toBe(2);
   });
@@ -362,7 +362,7 @@ describe("GLB generator", () => {
   test("total byte length is consistent", async () => {
     const p = makeParser();
     const { geometry } = await p.parse(SIMPLE_TRIANGLE, "test.dat");
-    const glb = p.toGlb(geometry!);
+    const glb = await p.toGlb(geometry!);
     const view = new DataView(glb.buffer);
     expect(view.getUint32(8, true)).toBe(glb.byteLength);
   });
@@ -370,7 +370,7 @@ describe("GLB generator", () => {
   test("GLB contains materials for transparent colours", async () => {
     const p = makeParser();
     const { geometry } = await p.parse(TRANSPARENT_PART, "trans.dat");
-    const glb = p.toGlb(geometry!);
+    const glb = await p.toGlb(geometry!);
     // Decode JSON chunk
     const jsonLength = new DataView(glb.buffer).getUint32(12, true);
     const jsonBytes  = glb.slice(20, 20 + jsonLength);
