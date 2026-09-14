@@ -210,7 +210,7 @@ export async function generateGlbV2(geometry: FlatGeometry, opts: GlbOptionsV2 =
   if (opts.flipY) {
     for (const m of welded) {
       for (let i = 1; i < m.positions.length; i += 3) {
-        m.positions[i] = -m.positions[i];
+        m.positions[i] = -m.positions[i]!;
       }
     }
   }

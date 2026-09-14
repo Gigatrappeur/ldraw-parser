@@ -24,11 +24,9 @@ import {
 	aabbExpand,
 	aabbFinalize,
 	projectTexmap,
-	lduScale,
 } from "./utils";
-import { generateGlb } from "./glb";
 import { generateGlbV2, type GlbOptionsV2 } from "./glb2";
-import { collectTextures, computeStats, extractColorPalette, mergeGeometry, transformGeometry, type ColorUsage, type GeometryStats, type LengthUnit } from "./postprocess";
+import { collectTextures, computeStats, extractColorPalette, mergeGeometry, transformGeometry, lduToUnitScale, type ColorUsage, type GeometryStats, type LengthUnit } from "./postprocess";
 import { generateSvgThumbnail, type SvgCameraOptions } from "./svg";
 
 // ── Types ─────────────────────────────────────────────────────
@@ -88,7 +86,7 @@ async function resolveFile(
  * @param file         – file being processed
  * @param matrix       – accumulated world transform
  * @param parentColor  – inherited colour (for code 16)
- * @param invertWinding – accumulated BFC winding inversion
+ * @param _invertWinding – accumulated BFC winding inversion (reserved)
  * @param depth        – recursion depth guard
  * @param meshMap      – output mesh accumulator
  * @param edgeMap      – output edge accumulator
@@ -98,7 +96,7 @@ async function flattenFile(
 	file: LDrawFile,
 	matrix: Matrix4,
 	parentColor: LDrawColor,
-	invertWinding: boolean,
+	_invertWinding: boolean,
 	depth: number,
 	meshMap: Map<string, GeometryMesh>,
 	edgeMap: Map<string, GeometryEdges>,
@@ -240,18 +238,13 @@ export class LDrawPart {
 		options?: GlbOptionsV2,
 		unit: LengthUnit = "m",
 		merge = true,
-		version: "v1" | "v2" = "v2",
 	): Promise<Uint8Array> {
 		if (!this.geometry) {
 			throw new Error("No geometry available. Use LDrawParser.parse() with flatten=true to generate geometry.");
 		}
-		const scale = unit === "ldu" ? 1 : lduScale(unit);
+		const scale = unit === "ldu" ? 1 : lduToUnitScale(unit);
 		let g = transformGeometry(this.geometry, scale, true);
 		if (merge) g = mergeGeometry(g);
-
-		if (version === "v1") {
-			return generateGlb(g, { name: this.file.name, ...options });
-		}
 		return await generateGlbV2(g, { name: this.file.name, ...options });
 	}
 

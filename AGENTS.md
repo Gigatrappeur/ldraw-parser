@@ -21,7 +21,7 @@
   - `colors.ts` — colour table (200+ official LDraw codes)
   - `postprocess.ts` — unit conversion, merge, stats, LOD
   - `svg.ts` — isometric SVG thumbnail generation
-  - `glb.ts` — glTF 2.0 binary export (no deps)
+  - `glb2.ts` — glTF 2.0 binary export (indexed, PBR, textures, transmission)
   - `obj.ts` — Wavefront OBJ export
   - `serialise.ts` — LDraw file serialization
   - `steps.ts` — STEP assembly step generation

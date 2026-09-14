@@ -123,7 +123,7 @@ export function transformGeometry(
  * Meshes with a TEXMAP are kept separate (they differ by texture even
  * when the color code is the same).
  */
-export function mergeMeshesByColor(geometry: FlatGeometry): FlatGeometry {
+function mergeMeshesByColor(geometry: FlatGeometry): FlatGeometry {
   const merged = new Map<string, GeometryMesh>();
 
   for (const mesh of geometry.meshes) {
@@ -157,7 +157,7 @@ function round(n: number): number {
 /**
  * Merge all GeometryEdges entries that share the same colorCode.
  */
-export function mergeEdgesByColor(geometry: FlatGeometry): FlatGeometry {
+function mergeEdgesByColor(geometry: FlatGeometry): FlatGeometry {
   const merged = new Map<number, GeometryEdges>();
 
   for (const eg of geometry.edges) {
@@ -331,25 +331,3 @@ export function collectTextures(geometry: FlatGeometry): string[] {
 }
 
 // ── Color overrides ───────────────────────────────────────────
-
-
-/**
- * Replace colors in a FlatGeometry without re-parsing.
- *
- * `overrides` maps an LDraw color code → replacement LDrawColor.
- * The replacement is injected into a cloned colorTable so that
- * all meshes/edges using that colorCode resolve to the new colour.
- */
-export function applyColorOverrides(
-  geometry: FlatGeometry,
-  overrides: Map<number, LDrawColor>,
-): FlatGeometry {
-  if (overrides.size === 0) return geometry;
-
-  const colorTable = new Map(geometry.colorTable);
-  for (const [code, replacement] of overrides) {
-    colorTable.set(code, replacement);
-  }
-
-  return { ...geometry, colorTable };
-}

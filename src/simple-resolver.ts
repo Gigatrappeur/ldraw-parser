@@ -1,6 +1,16 @@
 
 import { join } from "node:path";
 
+/**
+ * Bun-only file resolver using Bun.file() API.
+ * Not compatible with Node.js.
+ *
+ * @example
+ * ```ts
+ * const resolver = new SimpleFileResolver("/path/to/ldraw");
+ * const content = await resolver.resolve("3626b.dat");
+ * ```
+ */
 export class SimpleFileResolver {
   private cache: Map<string, string> = new Map();
   private paths: string[];

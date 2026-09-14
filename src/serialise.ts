@@ -24,7 +24,7 @@ import type {
   LDrawColor,
   Matrix4,
   Vec3,
-} from "./types.js";
+} from "./types";
 
 // ── Formatting helpers ────────────────────────────────────────
 

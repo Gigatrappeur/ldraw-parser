@@ -521,7 +521,7 @@ describe("Step geometry integration", () => {
 
   test("cumulative geometry grows with each step", async () => {
     const parser = new LDrawParser({ resolveFile: createTestResolver() });
-    const { file } = await parser.parse(ASSEMBLY, "assembly.ldr");
+    const { file } = await parser.parse(ASSEMBLY);
     const steps = extractSteps(file);
     expect(steps).toHaveLength(3);
 

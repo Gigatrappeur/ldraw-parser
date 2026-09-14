@@ -334,7 +334,7 @@ src/
 ├── fs-resolver.ts    Résolveur filesystem Bun avec cache
 ├── postprocess.ts    Conversion unités, merge, stats, LOD
 ├── svg.ts            Thumbnail SVG (projection, shading, painter's algo)
-├── glb.ts            GLB/glTF 2.0 binaire (sans dépendances)
+├── glb2.ts         GLB/glTF 2.0 binaire (indexed, PBR, textures, transmission)
 └── index.ts          Exports publics + classe LDrawParser
 ```
 

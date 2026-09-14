@@ -29,12 +29,6 @@ import type { FlatGeometry, LDrawFile } from "./types";
 //  --color <spec>
 //      Override the model's main color (LDraw code 16).
 //      Parts that inherit the parent color will use this value.
-//
-//  --color-map <code:spec[,code:spec...]>
-//      Remap any LDraw code to a new color.
-//      Example:  --color-map "4:#00FF00,1:Yellow"
-//
-// Both flags can be combined.
 
 interface CliOptions {
   inputs:       string[];
@@ -51,10 +45,25 @@ interface CliOptions {
   verbose:      boolean;
   help:         boolean;
   statsOnly:    boolean;
-  /** Remap specific color codes: "4:#FF0000,1:Blue" */
-  colorMap: string | undefined;
   /** Parsed --color spec (resolved before parser creation) */
   defaultColor: number | undefined;
+}
+
+export function parseColorSpec(spec: string): number | null {
+  const trimmed = spec.trim();
+  if (/^#[0-9A-Fa-f]{6}$/.test(trimmed)) {
+    const hex = parseInt(trimmed.replace("#", ""), 16);
+    for (const code of [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,45,46,47,52,54,57,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,89,92,100,110,112,115,118,120,125,128,134,135,137,142,147,148,150,151,178,179,183,184,185,186,187,189,191,212,216,217,226,230,232,236,272,273,288,295,299,308,313,320,321,322,323,324,325,326,330,335,351,353,366,373,375,378,379,383,406,449,450,462,484,494,495,496,503,504,505,507]) {
+      const hexCode = code;
+      if (hex === hexCode) return hexCode;
+    }
+    console.warn(`⚠ Unknown hex color: ${trimmed} – using default (71)`);
+    return 71;
+  }
+  const num = parseInt(trimmed, 10);
+  if (!isNaN(num)) return num;
+  console.warn(`⚠ Cannot parse color spec "${trimmed}" – using default (71)`);
+  return 71;
 }
 
 function parseArgs(argv: string[]): CliOptions {
@@ -74,7 +83,6 @@ function parseArgs(argv: string[]): CliOptions {
     help:          false,
     statsOnly:     false,
     defaultColor: undefined,
-    colorMap:      undefined,
   };
 
   const args = argv.slice(2);
@@ -94,8 +102,7 @@ function parseArgs(argv: string[]): CliOptions {
       case "--el":                    opts.svgElevation = parseFloat(args[++i] ?? "30"); break;
       case "--crease":                opts.creaseAngle = parseFloat(args[++i] ?? "45"); break;
       case "--library": case "--lib": opts.libraryRoot = args[++i]; break;
-      case "--color":                opts.defaultColor = parseInt(args[++i] ?? '71'); break;
-      case "--color-map":            opts.colorMap = args[++i]; break;
+      case "--color":                opts.defaultColor = parseColorSpec(args[++i] ?? '71') ?? undefined; break;
       case "--format": case "-f": {
         const fmts = (args[++i] ?? "glb,svg").split(",");
         opts.formats = new Set(fmts.filter((f): f is "glb" | "svg" | "obj" | "json" =>
@@ -133,8 +140,6 @@ OPTIONS
   --no-merge            Don't merge meshes by color
   --stats               Print geometry stats only, no file output
   --color <spec>        Override the main color (code 16)
-                          spec = number
-                          Example: --color 4
   --ri, --relative-input  Treat input paths as relative to the library directory
   -v, --verbose         Verbose logging
   -h, --help            Show this help
@@ -162,126 +167,6 @@ function fmtNum(n: number): string {
   return n.toLocaleString("en-US");
 }
 
-// ── Color spec parser ────────────────────────────────────────
-
-// /**
-//  * Parse a single color spec string into an LDrawColor.
-//  *
-//  * Accepted forms:
-//  *   - "4"          → LDraw color code integer
-//  *   - "#FF0000"    → hex RGB (# optional)
-//  *   - "Red"        → color name (case-insensitive, matched against table)
-//  *
-//  * Returns null when the spec cannot be resolved.
-//  */
-// function parseColorSpec(spec: string, table: Map<number, LDrawColor>): LDrawColor | null {
-//   const s = spec.trim();
-
-//   // ── Try integer color code ────────────────────────────────
-//   if (/^\d+$/.test(s)) {
-//     const code = parseInt(s, 10);
-//     return table.get(code) ?? null;
-//   }
-
-//   // ── Try hex color #RRGGBB or RRGGBB ──────────────────────
-//   const hexMatch = s.match(/^#?([0-9A-Fa-f]{6})$/);
-//   if (hexMatch) {
-//     const hex = hexMatch[1]!;
-//     const v = parseInt(hex, 16);
-//     const r = ((v >> 16) & 0xff) / 255;
-//     const g = ((v >>  8) & 0xff) / 255;
-//     const b = (v         & 0xff) / 255;
-//     // Synthesise an anonymous color with code 16 (will be set by caller)
-//     return {
-//       code:          16,
-//       name:          `#${hex.toUpperCase()}`,
-//       value:         v,
-//       edge:          0x595959,
-//       alpha:         255,
-//       luminance:     0,
-//       finish:        "NORMAL",
-//       isTransparent: false,
-//       rgba:          [r, g, b, 1],
-//       edgeRgba:      [0.35, 0.35, 0.35, 1],
-//       hex:           `#${hex.toUpperCase()}`,
-//     } satisfies LDrawColor;
-//   }
-
-//   // ── Try hex with alpha #RRGGBBAA ──────────────────────────
-//   const hexAlphaMatch = s.match(/^#?([0-9A-Fa-f]{8})$/);
-//   if (hexAlphaMatch) {
-//     const hex = hexAlphaMatch[1]!;
-//     const v    = parseInt(hex.slice(0, 6), 16);
-//     const a255 = parseInt(hex.slice(6, 8), 16);
-//     const r = ((v >> 16) & 0xff) / 255;
-//     const g = ((v >>  8) & 0xff) / 255;
-//     const b = (v         & 0xff) / 255;
-//     const a = a255 / 255;
-//     return {
-//       code:          16,
-//       name:          `#${hex.toUpperCase()}`,
-//       value:         v,
-//       edge:          0x595959,
-//       alpha:         a255,
-//       luminance:     0,
-//       finish:        "NORMAL",
-//       isTransparent: a < 1,
-//       rgba:          [r, g, b, a],
-//       edgeRgba:      [0.35, 0.35, 0.35, 1],
-//       hex:           `#${hex.toUpperCase()}`,
-//     } satisfies LDrawColor;
-//   }
-
-//   // ── Try color name ────────────────────────────────────────
-//   const lower = s.toLowerCase();
-//   for (const color of table.values()) {
-//     if (color.name.toLowerCase() === lower) return color;
-//   }
-//   // Partial match (e.g. "dark blue" → "Dark_Blue")
-//   for (const color of table.values()) {
-//     if (color.name.toLowerCase().replace(/_/g, " ") === lower) return color;
-//   }
-
-//   return null;
-// }
-
-// /**
-//  * Build the Map<code, LDrawColor> of overrides from CLI options.
-//  * Code 16 is used when --color is given without a --color-map entry for 16.
-//  */
-// function buildColorOverrides(
-//   opts: CliOptions,
-//   table: Map<number, LDrawColor>,
-// ): Map<number, LDrawColor> {
-//   const overrides = new Map<number, LDrawColor>();
-
-//   // --color-map → remap specific codes (--color is handled via parser defaultColor)
-//   if (opts.colorMap) {
-//     for (const entry of opts.colorMap.split(",")) {
-//       const colon = entry.indexOf(":");
-//       if (colon < 1) {
-//         console.warn(`  ⚠ Invalid --color-map entry: "${entry.trim()}" – expected <code>:<spec>`);
-//         continue;
-//       }
-//       const codeStr = entry.slice(0, colon).trim();
-//       const spec    = entry.slice(colon + 1).trim();
-//       const code    = parseInt(codeStr, 10);
-//       if (isNaN(code)) {
-//         console.warn(`  ⚠ Invalid color code in --color-map: "${codeStr}"`);
-//         continue;
-//       }
-//       const color = parseColorSpec(spec, table);
-//       if (color) {
-//         overrides.set(code, { ...color, code });
-//       } else {
-//         console.warn(`  ⚠ Unknown color spec in --color-map for code ${code}: "${spec}" – ignored`);
-//       }
-//     }
-//   }
-
-//   return overrides;
-// }
-
 // ── Process a single file ─────────────────────────────────────
 
 async function processFile(
@@ -289,24 +174,12 @@ async function processFile(
   opts: CliOptions,
   parser: LDrawParser,
 ): Promise<void> {
-  // console.log(inputPath);
-  // const absInput = join(opts.libraryRoot!, inputPath);
-  // console.log(absInput);
   const absInput = inputPath;
   const stem     = basename(absInput, extname(absInput));
   const outDir   = resolve(opts.outDir);
   await mkdir(outDir, { recursive: true });
 
   if (opts.verbose) console.log(`\n→ Processing: ${absInput}`);
-
-  // // Read file
-  // let content: string;
-  // try {
-  //   content = await bunFile(absInput).text();
-  // } catch {
-  //   console.error(`  ✗ Cannot read file: ${absInput}`);
-  //   return;
-  // }
 
   // Parse
   const t0 = performance.now();
@@ -347,17 +220,6 @@ async function processFile(
   }
 
   if (opts.statsOnly) return;
-
-  // ── Color overrides ───────────────────────────────────────
-  // --color-map: remap specific color codes post-parse
-  // const colorOverrides = buildColorOverrides(opts, parser.colorTable);
-  // if (colorOverrides.size > 0) {
-  //   geometry = applyColorOverrides(geometry, colorOverrides);
-  //   if (opts.verbose) {
-  //     console.log(`  Color map applied: ${[...colorOverrides.entries()]
-  //       .map(([code, c]) => `${code}→${c.name}(#${c.value.toString(16).padStart(6,"0")})`).join(", ")}`);
-  //   }
-  // }
 
   // ── GLB ──────────────────────────────────────────────────
   if (opts.formats.has("glb")) {
@@ -420,13 +282,6 @@ async function processFile(
       meta:  file.meta,
       stats: computeStats(geometry),
       aabb:  geometry.aabb,
-      palette: parser.palette(geometry).map((p) => ({
-        code: p.color.code,
-        name: p.color.name,
-        hex: `#${p.color.value.toString(16).padStart(6, "0")}`,
-        alpha: p.color.alpha,
-        triangles: p.triangleCount,
-      })),
     };
     const outPath = join(outDir, `${stem}.json`);
     await bunWrite(outPath, JSON.stringify(payload, null, 2));
@@ -447,32 +302,11 @@ async function main() {
     process.exit(opts.help ? 0 : 1);
   }
 
-  // Set up parser
-  // const resolver = createFilesystemResolver({ libraryRoot: opts.libraryRoot });
-  // const resolver = new LDrawFileResolver(opts.libraryRoot);
-
   // Load colour table first so parseColorSpec can match names
   const ldconfig = await loadLdConfigNode(opts.libraryRoot);
-  // const baseTable = buildColorTable(ldconfig ?? undefined);
-
-  // Resolve --color into a defaultColor for the parser (overrides code 16)
-  // let defaultColor = baseTable.get(71); // Light Bluish Grey — standard LDraw default
-  // if (opts.colorOverride) {
-  //   const resolved = parseColorSpec(opts.colorOverride, baseTable);
-  //   if (resolved) {
-  //     defaultColor = { ...resolved, code: 16 };
-  //     if (opts.verbose)
-  //       console.log(`✓ Default color: ${defaultColor.name} (#${defaultColor.value.toString(16).padStart(6,"0")})`);
-  //   } else {
-  //     console.warn(`⚠ Unknown --color spec: "${opts.colorOverride}" – using default`);
-  //   }
-  // }
 
   const parser = new LDrawParser({
-    // resolveFile:  resolver.resolve,
     libraryRoot: opts.libraryRoot,
-    // colorTable:   baseTable,
-    // defaultColor,
   });
 
   if (ldconfig) {

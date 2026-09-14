@@ -4,22 +4,9 @@
 // LDraw library files – all colours are hardcoded).
 // ============================================================
 
-import type { LDrawColorFinish, LDrawMaterial } from "../src/types";
+import type { LDrawColor as LDrawColorType, LDrawColorFinish, LDrawMaterial } from "../src/types";
 
-export type LDrawColor = {
-  code: number;
-  name: string;
-  value: number;
-  edge: number;
-  alpha: number;
-  luminance: number;
-  finish: LDrawColorFinish;
-  material?: LDrawMaterial;
-  isTransparent: boolean;
-  rgba: [number, number, number, number];
-  edgeRgba: [number, number, number, number];
-  hex: string;
-};
+export type LDrawColor = LDrawColorType;
 
 function hexToInt(hex: string): number {
   return parseInt(hex.replace(/^#/, ""), 16);

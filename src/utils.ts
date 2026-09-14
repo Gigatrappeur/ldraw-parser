@@ -1,9 +1,7 @@
-// ============================================================
 // LDraw Parser – Matrix / geometry utilities
 // ============================================================
 
 
-import type { LengthUnit } from "./postprocess";
 import type { TexmapDefinition, Matrix4, Vec3, Vec2 } from "./types";
 
 // ── Matrix helpers ────────────────────────────────────────────
@@ -68,7 +66,6 @@ export function transformPoint(m: Matrix4, v: Vec3): Vec3 {
   return { x, y, z };
 }
 
-/** Apply only the rotation/scale part of a column-major 4×4 to a Vec3 (w=0) */
 export function transformVector(m: Matrix4, v: Vec3): Vec3 {
   return {
     x: m[0] * v.x + m[4] * v.y + m[8]  * v.z,
@@ -223,14 +220,3 @@ export function projectTexmap(
 export function normalizeFileName(name: string): string {
   return name.replace(/\\/g, "/").toLowerCase().trim();
 }
-
-
-
-/**********************/
-export function lduScale(unit: LengthUnit): number {
-    // 1 LDU = 0.4 mm
-    const mm: Record<LengthUnit, number> = {
-      ldu: 1 / 0.4, mm: 1, cm: 0.1, m: 0.001, in: 1 / 25.4, studs: 1 / 8,
-    };
-    return 0.4 * (mm[unit] ?? 1);
-  }
