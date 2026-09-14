@@ -283,6 +283,7 @@ export type LDrawParserOptions =
    * Return null / undefined if the file cannot be found.
    */
   resolveFile: (name: string) => Promise<string | null | undefined>;
+  resolveTexture?: (name: string) => Promise<Uint8Array | null>
 }
 | {  libraryRoot: string }) &
 {
@@ -322,6 +323,7 @@ export type LDrawParserOptions =
 export interface ResolverContext {
   colorTable: ColorTable
   resolveFile: (name: string) => Promise<string | null | undefined>;
+  resolverTexture?: ((name: string) => Promise<Uint8Array | null | undefined>);
   processBFC: boolean;
   maxDepth: number;
   /** Cache: resolved name → parsed LDrawFile */

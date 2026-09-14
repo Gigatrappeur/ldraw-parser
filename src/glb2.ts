@@ -43,7 +43,7 @@ export interface GlbOptionsV2 {
    * Async texture loader. Return PNG/JPEG bytes to embed, null to skip.
    * The name passed is exactly as written in the TEXMAP directive.
    */
-  loadTexture?: (name: string) => Promise<Uint8Array | null> | Uint8Array | null;
+  loadTexture?: (name: string) => Promise<Uint8Array | null | undefined>;
   /**
     * Use KHR_materials_transmission for transparent parts (default: false).
     * Produces glass-like refraction in Babylon.js, three.js, model-viewer, etc.

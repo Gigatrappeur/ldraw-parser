@@ -226,10 +226,12 @@ async function flattenFile(
 export class LDrawPart {
 	file: LDrawFile
 	geometry?: FlatGeometry
+	private loadTexture?: (name: string) => Promise<Uint8Array | null | undefined>
 
-	constructor(file: LDrawFile, geometry?: FlatGeometry) {
+	constructor(file: LDrawFile, geometry?: FlatGeometry, loadTexture?: (name: string) => Promise<Uint8Array | null | undefined>) {
 		this.file = file;
 		this.geometry = geometry;
+		this.loadTexture = loadTexture
 	}
 
 	/**
@@ -237,7 +239,6 @@ export class LDrawPart {
 	 *
 	 * @param unit   Output unit (default: "m" for glTF compliance)
 	 * @param merge  Merge meshes by color before export (default: true)
-	 * @param version  GLB engine: "v2" (indexed, textures, PBR) or "v1" (flat, non-indexed)
 	 */
 	async toGlb(
 		options?: GlbOptionsV2,
@@ -250,7 +251,7 @@ export class LDrawPart {
 		const scale = unit === "ldu" ? 1 : lduToUnitScale(unit);
 		let g = transformGeometry(this.geometry, scale, true);
 		if (merge) g = mergeGeometry(g);
-		return await generateGlbV2(g, { name: this.file.name, ...options });
+		return await generateGlbV2(g, { name: this.file.name, loadTexture: this.loadTexture, ...options });
 	}
 
 
@@ -398,10 +399,10 @@ export async function loadLDrawModel(
 		// The first sub-file (insertion order) is the main model.
 		const [, firstSubFile] = [...file.subFiles.entries()][0]!;
 		const geometry = await flattenGeometry(firstSubFile, ctx, defaultColor);
-		return new LDrawPart(file, geometry);
+		return new LDrawPart(file, geometry, ctx.resolverTexture);
 	}
 
 	// Standard single-file or MPD where the root itself has type-1 refs
 	const geometry = await flattenGeometry(file, ctx, defaultColor);
-	return new LDrawPart(file, geometry);
+	return new LDrawPart(file, geometry, ctx.resolverTexture);
 }

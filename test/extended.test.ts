@@ -359,7 +359,7 @@ describe("generateGlbV2", () => {
     };
     const geo = makeFlatGeometry([meshWithTex]);
     const glb = await generateGlbV2(geo, {
-      loadTexture: () => fakePng,
+      loadTexture: () => Promise.resolve(fakePng),
     });
     const dv = new DataView(glb.buffer);
     const jsonLen = dv.getUint32(12, true);

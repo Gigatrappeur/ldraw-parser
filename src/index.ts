@@ -4,7 +4,7 @@
 
 // ── High-level convenience class ─────────────────────────────
 
-import { type LDrawParserOptions } from "./types";
+import { type LDrawParserOptions, type ResolverContext } from "./types";
 import { ColorTable } from "./colors";
 import { LDrawPart, loadLDrawModel } from "./resolver";
 import { SimpleFileResolver } from "./simple-resolver";
@@ -24,7 +24,7 @@ import { generateObj, type ObjExportOptions } from "./obj";
  * ```
  */
 export default class LDrawParser {
-  private ctx: import("./types").ResolverContext;
+  private ctx: ResolverContext;
   private opts: {
     flatten: boolean;
     keepRawLines: boolean;
@@ -36,16 +36,24 @@ export default class LDrawParser {
       flatten: options.flatten ?? true,
       keepRawLines: options.keepRawLines ?? false,
     };
-
-    const resolver = 'resolveFile' in options
-      ? options.resolveFile
-      : new SimpleFileResolver(options.libraryRoot).resolve;
+    
+    let partResolver, textureResolver;
+    if ('resolveFile' in options) {
+      partResolver = options.resolveFile
+      textureResolver = options.resolveTexture
+    } else {
+      const resolver = new SimpleFileResolver(options.libraryRoot)
+      partResolver = resolver.resolvePart
+      textureResolver = resolver.resolveTexture
+    }
+    
 
     this.defaultColor = options.defaultColor ?? 71; // Light Bluish Grey
 
     this.ctx = {
-      colorTable: new ColorTable(resolver),
-      resolveFile: resolver,
+      colorTable: new ColorTable(partResolver),
+      resolveFile: partResolver,
+      resolverTexture: textureResolver,
       processBFC: options.processBFC ?? true,
       maxDepth: options.maxDepth ?? 64,
       cache: new Map(),
@@ -83,7 +91,7 @@ export default class LDrawParser {
 
   /** Generate a GLB file from parsed geometry. */
   async toGlb(geometry: NonNullable<Awaited<ReturnType<typeof loadLDrawModel>>["geometry"]>, options?: GlbOptionsV2): Promise<Uint8Array> {
-    return generateGlbV2(geometry, options ?? {});
+    return generateGlbV2(geometry, {loadTexture: this.ctx.resolverTexture, ...options});
   }
 
   /** Generate an OBJ file from parsed geometry. */
