@@ -3,9 +3,10 @@
 // ============================================================
 
 import { describe, test, expect } from "bun:test";
-import { LDrawParser, parseLDrawFile } from "../src/index";
+import LDrawParser from "../src/index";
 import { buildColorTable } from "./color-table";
 import { createTestResolver, buildLdConfigContent } from "./test-resolver";
+import { parseLDrawFile } from "../src/parser";
 // import type { LDrawFile, FlatGeometry } from "../src/types";
 
 // ─────────────────────────────────────────────────────────────

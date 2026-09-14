@@ -12,6 +12,7 @@ import {
 	type GeometryEdges,
 	type GeometryVertex,
 	type ResolverContext,
+	type TexmapDefinition,
 } from "./types";
 import { parseLDrawFile } from "./parser";
 import {
@@ -101,6 +102,7 @@ async function flattenFile(
 	meshMap: Map<string, GeometryMesh>,
 	edgeMap: Map<string, GeometryEdges>,
 	ctx: ResolverContext,
+	parentTexmap?: TexmapDefinition,
 ): Promise<void> {
 	if (depth > ctx.maxDepth) return;
 
@@ -139,6 +141,7 @@ async function flattenFile(
 						ctx.colorTable.add(c)
 					}
 				}
+				// Pass parent texmap to child for inheritance
 				await flattenFile(
 					childFile,
 					childMatrix,
@@ -148,6 +151,7 @@ async function flattenFile(
 					meshMap,
 					edgeMap,
 					ctx,
+					ref.texmap,
 				);
 			}
 			continue;
@@ -156,7 +160,8 @@ async function flattenFile(
 		// ── Types 3 & 4 – triangles / quads ─────────────────────
 		if (cmd.type === 3 || cmd.type === 4) {
 			const color = await ctx.colorTable.resolveColor(cmd.colorCode, parentColor);
-			const texmap = cmd.texmap;
+			// Inherit parent texmap if child doesn't have one
+			const texmap = cmd.texmap ?? parentTexmap;
 			const key = meshKeyFull(color.code, texmap);
 
 			if (!meshMap.has(key)) {

@@ -5,7 +5,7 @@
 
 import { describe, test, expect } from "bun:test";
 import { generateSvgThumbnail } from "../src/svg";
-import { LDrawParser } from "../src/index";
+import LDrawParser from "../src/index";
 import type { Vec3, LDrawColor, GeometryMesh, FlatGeometry } from "../src/types";
 import { buildColorTable } from "./color-table";
 import { createTestResolver } from "./test-resolver";

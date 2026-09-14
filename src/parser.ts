@@ -46,6 +46,7 @@ interface TexmapState {
   phase: TexmapPhase;
   definition: TexmapDefinition;
   depth: number; // for nested texmaps
+  fallback?: boolean; // true if this texmap is a fallback for the next one
 }
 
 // ── BFC state ─────────────────────────────────────────────────
@@ -315,8 +316,11 @@ export function parseLDrawFile(
             texmapStack.push({ phase: "BODY", definition: def, depth: texmapStack.length });
           }
         } else if (keyword === "FALLBACK") {
+          // FALLBACK marks the current texmap as a fallback for the NEXT texmap,
+          // but does NOT deactivate it. The current texmap remains active for
+          // geometry lines until the NEXT replaces it.
           const top = texmapStack[texmapStack.length - 1];
-          if (top) top.phase = "FALLBACK";
+          if (top) top.fallback = true;
         } else if (keyword === "END") {
           texmapStack.pop();
         }

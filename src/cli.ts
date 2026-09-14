@@ -7,7 +7,7 @@ import {  write as bunWrite } from "bun";
 
 import { join, basename, extname, resolve } from "node:path";
 import { mkdir } from "node:fs/promises";
-import { LDrawParser } from "./index";
+import LDrawParser from "./index";
 import { loadLdConfigNode, warmNodeResolverCache } from "./node-resolver";
 import { generateGlbV2 } from "./glb2";
 import { generateObj } from "./obj";

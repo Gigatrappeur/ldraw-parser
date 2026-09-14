@@ -16,11 +16,12 @@ import {
   computeCameraRotations,
   rotationToMatrix,
 } from "../src/steps";
-import { parseLDrawFile, LDrawParser } from "../src/index";
+import LDrawParser from "../src/index";
 import { buildColorTable } from "./color-table";
 import { createTestResolver } from "./test-resolver";
 import type { LDrawSubFileRef, LDrawTriangle } from "../src/types";
 import { IDENTITY } from "../src/utils";
+import { parseLDrawFile } from "../src/parser";
 
 // ── Fixtures ─────────────────────────────────────────────────
 

@@ -21,7 +21,7 @@ import {
   LDU_PER_MM,
   MM_PER_LDU,
 } from "../src/postprocess";
-import { LDrawParser } from "../src/index";
+import LDrawParser from "../src/index";
 import type { GeometryMesh, FlatGeometry, Vec3 } from "../src/types";
 import { buildColorTable } from "./color-table";
 import { createTestResolver } from "./test-resolver";
