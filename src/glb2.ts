@@ -312,9 +312,11 @@ export async function buildGltfPayload(
     asset: { version: "2.0", generator: "ldraw-parser" },
     scene: 0,
     scenes: [{ name: 'SCENE', nodes: [0] }],
-    nodes: [{ mesh: 0, name: 'LDRAW-' + name, userData: { ldrawCode: name} }],
+    nodes: [{ mesh: 0, name: 'LDRAW-' + name }],
     meshes: [{ name: 'mesh_' + name, primitives: ctx.primitives }],
-    materials: ctx.materials, accessors: ctx.accessors, bufferViews: ctx.bufferViews,
+    materials: ctx.materials,
+    accessors: ctx.accessors,
+    bufferViews: ctx.bufferViews,
     buffers: [{ byteLength: binData.byteLength }],
   };
   if (ctx.textures.length) gltf["textures"] = ctx.textures;
