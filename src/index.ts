@@ -9,7 +9,7 @@ import { ColorTable } from "./colors";
 import { LDrawPart, loadLDrawModel } from "./resolver";
 import { SimpleFileResolver } from "./simple-resolver";
 import { generateSvgThumbnail, type SvgCameraOptions } from "./svg";
-import { generateGlbV2, type GlbOptionsV2 } from "./glb2";
+import { generateGlbV2, exportGltf, type GlbOptionsV2, type GltfExportOptions } from "./glb2";
 import { generateObj, type ObjExportOptions } from "./obj";
 
 /**
@@ -92,6 +92,17 @@ export default class LDrawParser {
   /** Generate a GLB file from parsed geometry. */
   async toGlb(geometry: NonNullable<Awaited<ReturnType<typeof loadLDrawModel>>["geometry"]>, options?: GlbOptionsV2): Promise<Uint8Array> {
     return generateGlbV2(geometry, {loadTexture: this.ctx.resolverTexture, ...options});
+  }
+
+  /**
+   * Generate a `.gltf` file (plain JSON). Returns the JSON string plus any
+   * external image bytes (when `inlineImages: false`).
+   */
+  async toGltf(
+    geometry: NonNullable<Awaited<ReturnType<typeof loadLDrawModel>>["geometry"]>,
+    options?: GlbOptionsV2 & GltfExportOptions,
+  ): Promise<{ gltf: string; images: Map<string, Uint8Array> }> {
+    return exportGltf(geometry, { loadTexture: this.ctx.resolverTexture, ...options });
   }
 
   /** Generate an OBJ file from parsed geometry. */

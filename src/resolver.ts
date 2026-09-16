@@ -26,7 +26,7 @@ import {
 	aabbFinalize,
 	projectTexmap,
 } from "./utils";
-import { generateGlbV2, type GlbOptionsV2 } from "./glb2";
+import { exportGltf, generateGlbV2, type GlbOptionsV2, type GltfExportOptions } from "./glb2";
 import { collectTextures, computeStats, extractColorPalette, mergeGeometry, transformGeometry, lduToUnitScale, type ColorUsage, type GeometryStats, type LengthUnit } from "./postprocess";
 import { generateSvgThumbnail, type SvgCameraOptions } from "./svg";
 
@@ -234,6 +234,14 @@ export class LDrawPart {
 		this.loadTexture = loadTexture
 	}
 
+	async toGltf(
+		options?: GlbOptionsV2 & GltfExportOptions,
+	  ): Promise<{ gltf: string; images: Map<string, Uint8Array> }> {
+		if (!this.geometry) {
+			throw new Error("No geometry available. Use LDrawParser.parse() with flatten=true to generate geometry.");
+		}
+		return exportGltf(this.geometry, { name: this.file.name.replace('.dat', ''), loadTexture: this.loadTexture, ...options });
+	  }
 	/**
 	 * Generate a GLB binary buffer from already-flattened geometry.
 	 *
@@ -251,7 +259,7 @@ export class LDrawPart {
 		const scale = unit === "ldu" ? 1 : lduToUnitScale(unit);
 		let g = transformGeometry(this.geometry, scale, true);
 		if (merge) g = mergeGeometry(g);
-		return await generateGlbV2(g, { name: this.file.name, loadTexture: this.loadTexture, ...options });
+		return await generateGlbV2(g, { name: this.file.name.replace('.dat', ''), loadTexture: this.loadTexture, ...options });
 	}
 
 

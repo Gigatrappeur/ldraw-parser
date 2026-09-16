@@ -1,5 +1,5 @@
 // ============================================================
-// LDraw Parser – GLB generator v2
+// LDraw Parser – GLTF/GLB generator
 //   • Indexed geometry (vertex welding)
 //   • Smooth OR flat normals
 //   • PNG/JPEG texture embedding (TEXMAP)
@@ -113,8 +113,27 @@ function texmapKeyString(t: { projection: string; texture: string; point1: {x:nu
 }
 
 // ── Material builder ──────────────────────────────────────────
-
-function buildMaterial(color: LDrawColor, textureIndex: number | null, opts: GlbOptionsV2): Record<string, unknown> {
+interface MaterialType {
+  name: string
+  pbrMetallicRoughness: {
+    baseColorFactor: number[]
+    metallicFactor: number
+    roughnessFactor: number
+    baseColorTexture?: {
+      index: number
+    }
+  }
+  doubleSided: boolean
+  emissiveFactor?: number[]
+  extensions?: {
+    KHR_materials_transmission?: {
+      transmissionFactor: number
+    }
+  }
+  alphaMode?: string
+  alphaCutoff?: number
+}
+function buildMaterial(color: LDrawColor, textureIndex: number | null, opts: GlbOptionsV2): MaterialType {
   const r = color.rgba[0] ?? 0, g = color.rgba[1] ?? 0, b = color.rgba[2] ?? 0, a = color.rgba[3] ?? 1;
   const pbr: { baseColorFactor: number[]; metallicFactor: number; roughnessFactor: number; baseColorTexture?: { index: number } } = { baseColorFactor: [r, g, b, a], metallicFactor: 0, roughnessFactor: 0.8 };
   if (textureIndex !== null) pbr.baseColorTexture = { index: textureIndex };
@@ -125,7 +144,7 @@ function buildMaterial(color: LDrawColor, textureIndex: number | null, opts: Glb
     case "RUBBER":        pbr.metallicFactor = 0.0; pbr.roughnessFactor = 0.95; break;
     case "MATTE_METALLIC":pbr.metallicFactor = 0.8; pbr.roughnessFactor = 0.60; break;
   }
-  const mat: { name: string; pbrMetallicRoughness: { baseColorFactor: number[]; metallicFactor: number; roughnessFactor: number; baseColorTexture?: { index: number } }; doubleSided: boolean; emissiveFactor?: number[]; extensions?: { KHR_materials_transmission?: { transmissionFactor: number } }; alphaMode?: string; alphaCutoff?: number } = { name: color.name, pbrMetallicRoughness: pbr, doubleSided: true };
+  const mat: MaterialType = { name: 'LDRAW-' + color.code + '-' + color.name, pbrMetallicRoughness: pbr, doubleSided: true };
   if (color.luminance > 0) {
     const lf = color.luminance / 255;
     mat.emissiveFactor = [r * lf, g * lf, b * lf];
@@ -184,12 +203,22 @@ function addAcc(ctx: Ctx, bv: number, ct: number, count: number, type: string, m
   ctx.accessors.push(a); return i;
 }
 
-// ── Main function ─────────────────────────────────────────────
+// ── glTF payload shared by GLB and GLTF ───────────────────────
+
+export interface GltfPayload {
+  json: Record<string, unknown>;
+  binaryChunks: Uint8Array[];
+  textures: Array<{ name: string; bytes: Uint8Array; mimeType: string }>;
+}
 
 /**
- * Generate a GLB file with indexed geometry and optional embedded textures.
+ * Build the full glTF payload: the JSON dictionary, the binary buffer chunks,
+ * and any embedded texture bytes. Shared by both `exportGltf` (JSON text) and
+ * `generateGlbV2` (binary container).
  */
-export async function generateGlbV2(geometry: FlatGeometry, opts: GlbOptionsV2 = {}): Promise<Uint8Array> {
+export async function buildGltfPayload(
+  geometry: FlatGeometry, opts: GlbOptionsV2 = {},
+): Promise<GltfPayload> {
   const name    = opts.name    ?? "LDrawModel";
   const normals = opts.normals ?? true;
   const uvs     = opts.uvs     ?? true;
@@ -217,6 +246,7 @@ export async function generateGlbV2(geometry: FlatGeometry, opts: GlbOptionsV2 =
 
   // Load textures
   const texMap = new Map<string, number>();
+  const textures: GltfPayload["textures"] = [];
   if (opts.loadTexture) {
     ctx.samplers.push({ magFilter: 9729, minFilter: 9987, wrapS: 10497, wrapT: 10497 });
     const names = new Set(welded.map((m) => m.texmapTexture).filter((n): n is string => n !== undefined));
@@ -227,6 +257,7 @@ export async function generateGlbV2(geometry: FlatGeometry, opts: GlbOptionsV2 =
       ctx.images.push({ bufferView: bv, mimeType: guessMime(n) });
       ctx.textures.push({ sampler: 0, source: ctx.images.length - 1 });
       texMap.set(n, ctx.textures.length - 1);
+      textures.push({ name: n, bytes, mimeType: guessMime(n) });
     }
   }
 
@@ -237,7 +268,7 @@ export async function generateGlbV2(geometry: FlatGeometry, opts: GlbOptionsV2 =
     const texIdx = mesh.texmap?.texture ? (texMap.get(mesh.texmap.texture) ?? null) : null;
     const color = geometry.colorTable?.get(mesh.colorCode);
     const mat = buildMaterial(color!, texIdx, opts);
-    const ext = (mat as Record<string, unknown>)["extensions"] as Record<string, unknown> | undefined;
+    const ext = mat.extensions;
     if (ext) for (const k of Object.keys(ext)) ctx.exts.add(k);
     colMatMap.set(mesh.colorCode, ctx.materials.length);
     ctx.materials.push(mat);
@@ -279,8 +310,10 @@ export async function generateGlbV2(geometry: FlatGeometry, opts: GlbOptionsV2 =
   const binData = flatBin(ctx.bin);
   const gltf: Record<string, unknown> = {
     asset: { version: "2.0", generator: "ldraw-parser" },
-    scene: 0, scenes: [{ name, nodes: [0] }], nodes: [{ mesh: 0, name }],
-    meshes: [{ name, primitives: ctx.primitives }],
+    scene: 0,
+    scenes: [{ name: 'SCENE', nodes: [0] }],
+    nodes: [{ mesh: 0, name: 'LDRAW-' + name, userData: { ldrawCode: name} }],
+    meshes: [{ name: 'mesh_' + name, primitives: ctx.primitives }],
     materials: ctx.materials, accessors: ctx.accessors, bufferViews: ctx.bufferViews,
     buffers: [{ byteLength: binData.byteLength }],
   };
@@ -289,17 +322,117 @@ export async function generateGlbV2(geometry: FlatGeometry, opts: GlbOptionsV2 =
   if (ctx.samplers.length) gltf["samplers"] = ctx.samplers;
   if (ctx.exts.size)       gltf["extensionsUsed"] = [...ctx.exts];
 
-  const jb  = new TextEncoder().encode(JSON.stringify(gltf));
+  return { json: gltf, binaryChunks: ctx.bin.chunks, textures };
+}
+
+// ── Main function: binary GLB ─────────────────────────────────
+
+/**
+ * Generate a GLB file with indexed geometry and optional embedded textures.
+ */
+export async function generateGlbV2(geometry: FlatGeometry, opts: GlbOptionsV2 = {}): Promise<Uint8Array> {
+  const { json, binaryChunks } = await buildGltfPayload(geometry, opts);
+  const binData = flatBin({ chunks: binaryChunks, total: binaryChunks.reduce((s, c) => s + c.byteLength, 0) });
+  const jb  = new TextEncoder().encode(JSON.stringify(json));
   const jp  = align4(jb.length);
-  const jc  = new Uint8Array(jp); jc.fill(0x20); jc.set(jb);
+  const jc  = new Uint8Array(jp);
+  jc.fill(0x20);
+  jc.set(jb);
   const bp  = align4(binData.byteLength);
-  const bc  = new Uint8Array(bp); bc.set(binData);
+  const bc  = new Uint8Array(bp);
+  bc.set(binData);
   const has = binData.byteLength > 0;
   const tot = 12 + 8 + jp + (has ? 8 + bp : 0);
   const glb = new Uint8Array(tot);
   const dv  = new DataView(glb.buffer);
-  dv.setUint32(0, GLTF_MAGIC, true);   dv.setUint32(4, GLTF_VERSION, true); dv.setUint32(8, tot, true);
-  dv.setUint32(12, jp, true);          dv.setUint32(16, CHUNK_JSON, true);  glb.set(jc, 20);
-  if (has) { dv.setUint32(20+jp, bp, true); dv.setUint32(24+jp, CHUNK_BIN, true); glb.set(bc, 28+jp); }
+  dv.setUint32(0, GLTF_MAGIC, true);
+  dv.setUint32(4, GLTF_VERSION, true);
+  dv.setUint32(8, tot, true);
+  dv.setUint32(12, jp, true);
+  dv.setUint32(16, CHUNK_JSON, true);
+  glb.set(jc, 20);
+  if (has) {
+    dv.setUint32(20+jp, bp, true);
+    dv.setUint32(24+jp, CHUNK_BIN, true);
+    glb.set(bc, 28+jp);
+  }
   return glb;
+}
+
+// ── Main function: JSON GLTF ──────────────────────────────────
+
+/**
+ * Options for `exportGltf`.
+ */
+export interface GltfExportOptions {
+  /**
+   * Embed images as base64 `data:` URIs in the JSON (default: true).
+   * Set to `false` to write the texture files to disk and reference them
+   * as relative paths alongside the `.gltf` file.
+   */
+  inlineImages?: boolean;
+}
+
+/**
+ * Export a `.gltf` file (plain JSON + optional external images).
+ *
+ * Returns an object with:
+ *   - `gltf`: the JSON string to write as `name.gltf`
+ *   - `images`: map of texture name → bytes (only when `inlineImages: false`)
+ */
+export async function exportGltf(
+  geometry: FlatGeometry, opts: GlbOptionsV2 & GltfExportOptions = {},
+): Promise<{ gltf: string; images: Map<string, Uint8Array> }> {
+  const inline = opts.inlineImages !== false;
+  const { json, textures } = await buildGltfPayload(geometry, opts);
+
+  if (inline && textures.length > 0) {
+    // Embed each texture as a base64 data URI in the glTF JSON
+    const imagesArr = json["images"] as Record<string, unknown>[];
+    const texturesArr = json["textures"] as Record<string, unknown>[] | undefined;
+    for (let i = 0; i < imagesArr.length; i++) {
+      const img = imagesArr[i]!;
+      if (img["uri"]) continue; // already has a URI
+      const tex = textures.find((t) => t.name === (img["source"] as string | undefined));
+      if (!tex) continue;
+      const b64 = Buffer.from(tex.bytes).toString("base64");
+      img["uri"] = `data:${tex.mimeType};base64,${b64}`;
+    }
+    if (texturesArr) {
+      // Adjust texture source indices to match renumbered images
+      texturesArr.forEach((t) => {
+        const src = t["source"] as number;
+        if (typeof src === "number") t["source"] = src;
+      });
+    }
+  } else if (!inline && textures.length > 0) {
+    // Reference external image files by basename
+    const imagesArr = json["images"] as Record<string, unknown>[];
+    const texturesArr = json["textures"] as Record<string, unknown>[] | undefined;
+    if (imagesArr) {
+      const externalImages: Record<string, unknown>[] = [];
+      const srcRemap = new Map<number, number>();
+      let extIdx = 0;
+      for (let i = 0; i < imagesArr.length; i++) {
+        const img = imagesArr[i]!;
+        if (img["bufferView"] !== undefined) {
+          const tex = textures[extIdx];
+          if (tex) {
+            srcRemap.set(i, extIdx);
+            externalImages.push({ uri: tex.name.split("/").pop()!, mimeType: tex.mimeType });
+            extIdx++;
+          }
+        }
+      }
+      if (texturesArr) {
+        for (const t of texturesArr) {
+          const src = t["source"] as number;
+          if (srcRemap.has(src)) t["source"] = srcRemap.get(src);
+        }
+      }
+      json["images"] = externalImages;
+    }
+  }
+
+  return { gltf: JSON.stringify(json, null, 2), images: new Map(textures.map((t) => [t.name, t.bytes])) };
 }

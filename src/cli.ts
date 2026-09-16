@@ -9,7 +9,7 @@ import { join, basename, extname, resolve } from "node:path";
 import { mkdir } from "node:fs/promises";
 import LDrawParser from "./index";
 import { loadLdConfigNode, warmNodeResolverCache } from "./node-resolver";
-import { generateGlbV2 } from "./glb2";
+import { generateGlbV2, exportGltf } from "./glb2";
 import { generateObj } from "./obj";
 import { computeStats, transformGeometry, lduToUnitScale, mergeGeometry, type LengthUnit } from "./postprocess";
 import { generateSvgThumbnail } from "./svg";
@@ -33,7 +33,7 @@ import type { FlatGeometry, LDrawFile } from "./types";
 interface CliOptions {
   inputs:       string[];
   outDir:       string;
-  formats:      Set<"glb" | "svg" | "obj" | "json">;
+  formats:      Set<"glb" | "gltf" | "svg" | "obj" | "json">;
   unit:         string;
   svgSize:      number;
   svgAzimuth:   number;
@@ -105,8 +105,8 @@ function parseArgs(argv: string[]): CliOptions {
       case "--color":                opts.defaultColor = parseColorSpec(args[++i] ?? '71') ?? undefined; break;
       case "--format": case "-f": {
         const fmts = (args[++i] ?? "glb,svg").split(",");
-        opts.formats = new Set(fmts.filter((f): f is "glb" | "svg" | "obj" | "json" =>
-          ["glb", "svg", "obj", "json"].includes(f)));
+        opts.formats = new Set(fmts.filter((f): f is "glb" | "gltf" | "svg" | "obj" | "json" =>
+          ["glb", "gltf", "svg", "obj", "json"].includes(f)));
         break;
       }
       default:
@@ -129,7 +129,7 @@ USAGE
 
 OPTIONS
   -o, --out <dir>       Output directory (default: ./out)
-  -f, --format <list>   Comma-separated formats: glb,svg,obj,json  (default: glb,svg)
+  -f, --format <list>   Comma-separated formats: glb,gltf,svg,obj,json  (default: glb,svg)
   --unit <unit>         Output unit: ldu|mm|cm|m|in|studs  (default: m)
   --lib, --library <p>  Path to LDraw library root (env: LDRAW_LIB)
   --svg-size <px>       SVG thumbnail size in pixels (default: 512)
@@ -241,6 +241,30 @@ async function processFile(
     await bunWrite(outPath, glb);
     const dt = (performance.now() - t1).toFixed(1);
     console.log(`  ✓ GLB  → ${outPath}  (${fmtBytes(glb.byteLength)}, ${dt} ms)`);
+  }
+
+  // ── GLTF ───────────────────────────────────────────────────
+  if (opts.formats.has("gltf")) {
+    const t1 = performance.now();
+    const unit = opts.unit as LengthUnit;
+    const scale = unit === "ldu" ? 1 : lduToUnitScale(unit);
+    const geoForGltf = opts.merge
+      ? mergeGeometry(transformGeometry(geometry, scale, true))
+      : transformGeometry(geometry, scale, true);
+    const { gltf, images } = await exportGltf(geoForGltf, {
+      name:    stem,
+      normals: true,
+      weld:    opts.smooth
+        ? { smoothNormals: true, creasAngle: opts.creaseAngle }
+        : { smoothNormals: false },
+    });
+    const outPath = join(outDir, `${stem}.gltf`);
+    await bunWrite(outPath, gltf);
+    if (images.size > 0) {
+      for (const [name, bytes] of images) await bunWrite(join(outDir, name), bytes);
+    }
+    const dt = (performance.now() - t1).toFixed(1);
+    console.log(`  ✓ GLTF → ${outPath}  (${fmtBytes(gltf.length)}, ${dt} ms)`);
   }
 
   // ── SVG ──────────────────────────────────────────────────
