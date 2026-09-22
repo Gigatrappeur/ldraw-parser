@@ -10,11 +10,11 @@
 //   - Color palette extraction
 // ============================================================
 
+import type { LDrawColor } from "./colors";
 import type {
   FlatGeometry,
   GeometryMesh,
   GeometryEdges,
-  LDrawColor,
   Vec3,
 } from "./types";
 import { aabbEmpty, aabbExpand, aabbFinalize } from "./utils";

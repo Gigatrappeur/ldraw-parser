@@ -2,33 +2,12 @@
 // LDraw Parser – Recursive file resolver + geometry flattener
 // ============================================================
 
-import {
-	type LDrawFile,
-	// type LDrawSubFileRef,
-	type LDrawColor,
-	type Matrix4,
-	type FlatGeometry,
-	type GeometryMesh,
-	type GeometryEdges,
-	type GeometryVertex,
-	type ResolverContext,
-	type TexmapDefinition,
-} from "./types";
-import { parseLDrawFile } from "./parser";
-import {
-	multiplyMatrices,
-	transformPoint,
-	matrixDeterminant3,
-	IDENTITY,
-	normalizeFileName,
-	aabbEmpty,
-	aabbExpand,
-	aabbFinalize,
-	projectTexmap,
-} from "./utils";
-import { exportGltf, generateGlbV2, type GlbOptionsV2, type GltfExportOptions } from "./glb2";
-import { collectTextures, computeStats, extractColorPalette, mergeGeometry, transformGeometry, lduToUnitScale, type ColorUsage, type GeometryStats, type LengthUnit } from "./postprocess";
-import { generateSvgThumbnail, type SvgCameraOptions } from "./svg";
+import { parseLDrawFile, type LDrawFile } from "./parser";
+import { IDENTITY, normalizeFileName, aabbEmpty, aabbExpand, aabbFinalize } from "./utils";
+import type { ColorTable, LDrawColor } from "./colors";
+import { LDrawPart } from "./ldraw-part";
+import { projectTexmap } from "./texture";
+import type { FlatGeometry, GeometryEdges, GeometryMesh, GeometryVertex, Matrix4, TexmapDefinition, Vec3 } from "./types";
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -48,6 +27,18 @@ function meshKeyFull(colorCode: number, texmap: FlatGeometry["meshes"][number]["
 
 // ── Resolver ──────────────────────────────────────────────────
 
+// ── Resolver context ──────────────────────────────────────────
+
+export interface ResolverContext {
+  colorTable: ColorTable
+  resolveFile: (name: string) => Promise<string>;
+  resolverTexture?: ((name: string) => Promise<Uint8Array>);
+  maxDepth: number;
+  /** Cache: resolved name → parsed LDrawFile */
+  cache: Map<string, LDrawFile>;
+}
+
+
 /**
  * Resolve a sub-file reference.
  * Returns the parsed LDrawFile (from cache if already seen).
@@ -56,15 +47,13 @@ async function resolveFile(
 	// ref: LDrawSubFileRef,
 	filename: string,
 	ctx: ResolverContext,
-): Promise<LDrawFile | null> {
+): Promise<LDrawFile> {
 	const key = normalizeFileName(filename);
-	if (ctx.cache.has(key)) return ctx.cache.get(key)!;
+	if (ctx.cache.has(key)) {
+		return ctx.cache.get(key)!;
+	}
 
 	const content = await ctx.resolveFile(filename);
-
-
-	if (!content) return null;
-
 	const file = parseLDrawFile(content, key);
 	ctx.cache.set(key, file);
 
@@ -220,92 +209,49 @@ async function flattenFile(
 }
 
 
+/** Multiply two column-major 4×4 matrices: result = a * b */
+function multiplyMatrices(a: Matrix4, b: Matrix4): Matrix4 {
+  const out: number[] = new Array(16).fill(0);
+  for (let col = 0; col < 4; col++) {
+    for (let row = 0; row < 4; row++) {
+      let sum = 0;
+      for (let k = 0; k < 4; k++) {
+        sum += (a[k * 4 + row] ?? 0) * (b[col * 4 + k] ?? 0);
+      }
+      out[col * 4 + row] = sum;
+    }
+  }
+  return out as Matrix4;
+}
+
+
+/** Apply a column-major 4×4 to a Vec3 (w=1) */
+function transformPoint(m: Matrix4, v: Vec3): Vec3 {
+  const x = m[0] * v.x + m[4] * v.y + m[8]  * v.z + m[12];
+  const y = m[1] * v.x + m[5] * v.y + m[9]  * v.z + m[13];
+  const z = m[2] * v.x + m[6] * v.y + m[10] * v.z + m[14];
+  return { x, y, z };
+}
+
+
+/**
+ * Return the determinant of the 3×3 rotation sub-matrix.
+ * Negative determinant means the matrix includes a reflection → invert winding.
+ */
+function matrixDeterminant3(m: Matrix4): number {
+  return (
+    m[0] * (m[5] * m[10] - m[9] * m[6]) -
+    m[4] * (m[1] * m[10] - m[9] * m[2]) +
+    m[8] * (m[1] * m[6]  - m[5] * m[2])
+  );
+}
+
+
 // ── Public API ────────────────────────────────────────────────
 
 
-export class LDrawPart {
-	file: LDrawFile
-	geometry?: FlatGeometry
-	private loadTexture?: (name: string) => Promise<Uint8Array | null | undefined>
-
-	constructor(file: LDrawFile, geometry?: FlatGeometry, loadTexture?: (name: string) => Promise<Uint8Array | null | undefined>) {
-		this.file = file;
-		this.geometry = geometry;
-		this.loadTexture = loadTexture
-	}
-
-	async toGltf(
-		options?: GlbOptionsV2 & GltfExportOptions,
-	  ): Promise<{ gltf: string; images: Map<string, Uint8Array> }> {
-		if (!this.geometry) {
-			throw new Error("No geometry available. Use LDrawParser.parse() with flatten=true to generate geometry.");
-		}
-		return exportGltf(this.geometry, { name: this.file.name.replace('.dat', ''), loadTexture: this.loadTexture, ...options });
-	  }
-	/**
-	 * Generate a GLB binary buffer from already-flattened geometry.
-	 *
-	 * @param unit   Output unit (default: "m" for glTF compliance)
-	 * @param merge  Merge meshes by color before export (default: true)
-	 */
-	async toGlb(
-		options?: GlbOptionsV2,
-		unit: LengthUnit = "m",
-		merge = true,
-	): Promise<Uint8Array> {
-		if (!this.geometry) {
-			throw new Error("No geometry available. Use LDrawParser.parse() with flatten=true to generate geometry.");
-		}
-		const scale = unit === "ldu" ? 1 : lduToUnitScale(unit);
-		let g = transformGeometry(this.geometry, scale, true);
-		if (merge) g = mergeGeometry(g);
-		return await generateGlbV2(g, { name: this.file.name.replace('.dat', ''), loadTexture: this.loadTexture, ...options });
-	}
 
 
-	/**
-	 * Generate an SVG thumbnail string from already-flattened geometry.
-	 */
-	toSvg(options?: SvgCameraOptions): string {
-
-		if (!this.geometry) {
-			throw new Error("No geometry available. Use LDrawParser.parse() with flatten=true to generate geometry.");
-		}
-		return generateSvgThumbnail(this.geometry, options);
-	}
-
-	/**
-		 * Compute geometry statistics (triangle count, AABB, estimated memory…).
-		 */
-	stats(): GeometryStats {
-		if (!this.geometry) {
-			throw new Error("No geometry available. Use LDrawParser.parse() with flatten=true to generate geometry.");
-		}
-		return computeStats(this.geometry);
-	}
-
-
-
-	/**
-	 * Extract the color palette used in the geometry, sorted by usage.
-	 */
-	palette(): ColorUsage[] {
-		if (!this.geometry) {
-			throw new Error("No geometry available. Use LDrawParser.parse() with flatten=true to generate geometry.");
-		}
-		return extractColorPalette(this.geometry);
-	}
-
-	/**
-	 * List all texture file names referenced via TEXMAP.
-	 */
-	textures(): string[] {
-		if (!this.geometry) {
-			throw new Error("No geometry available. Use LDrawParser.parse() with flatten=true to generate geometry.");
-		}
-		return collectTextures(this.geometry);
-	}
-}
 /**
  * Fully resolve and flatten an LDrawFile into a FlatGeometry
  * suitable for GLB/SVG rendering.
@@ -365,16 +311,10 @@ export async function flattenGeometry(
  * Load, parse and resolve an LDraw model from its string content.
  * Returns both the structured LDrawFile and (if flatten=true) a FlatGeometry.
  */
-export async function loadLDrawModel(
-	name: string,
-	ctx: ResolverContext,
-	flatten = true,
-	defaultColor: LDrawColor,
-): Promise<LDrawPart> {
+export async function loadLDrawModel(name: string, ctx: ResolverContext, flatten: true, defaultColor: LDrawColor): Promise<LDrawPart>
+export async function loadLDrawModel(name: string, ctx: ResolverContext, flatten: false, defaultColor: LDrawColor): Promise<LDrawFile>
+export async function loadLDrawModel(name: string, ctx: ResolverContext, flatten: boolean = true, defaultColor: LDrawColor): Promise<LDrawPart | LDrawFile> {
 	const file = await resolveFile(name, ctx); // Preload the file into cache
-	if (!file) {
-		throw new Error(`Fichier introuvable: ${name}`);
-	}
 
 	// Register file-level colours
 	if (file.meta.colors) {
@@ -384,7 +324,7 @@ export async function loadLDrawModel(
 	}
 
 	if (!flatten) {
-		return new LDrawPart(file);
+		return file;
 	}
 
 	// ── MPD root detection ────────────────────────────────────
@@ -414,3 +354,4 @@ export async function loadLDrawModel(
 	const geometry = await flattenGeometry(file, ctx, defaultColor);
 	return new LDrawPart(file, geometry, ctx.resolverTexture);
 }
+

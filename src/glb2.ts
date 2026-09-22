@@ -7,7 +7,8 @@
 //   • KHR_materials_transmission for transparent parts
 // ============================================================
 
-import type { FlatGeometry, GeometryMesh, LDrawColor } from "./types";
+import type { LDrawColor } from "./colors";
+import type { FlatGeometry, GeometryMesh } from "./types";
 import {
   weldGeometry,
   mergeWeldedMeshes,

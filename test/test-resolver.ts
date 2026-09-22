@@ -4,7 +4,7 @@
 // sans dépendre de l'arborescence LDraw réelle.
 // ============================================================
 
-import type { LDrawColor } from "./color-table";
+import type { LDrawColor } from "../src/colors";
 import { buildColorTable } from "./color-table";
 
 /**
@@ -45,11 +45,11 @@ function isLDrawContent(s: string): boolean {
 export function createTestResolver(
   subFiles: Record<string, string> = {},
   ldconfigOverride?: string,
-): (name: string) => Promise<string | null> {
+): (name: string) => Promise<string> {
   const colorTable = buildColorTable();
   const defaultLdconfig = ldconfigOverride ?? buildLdConfigContent(colorTable);
 
-  return async (name: string): Promise<string | null> => {
+  return async (name: string): Promise<string> => {
     // Si le "nom" ressemble à du contenu LDraw brut, le renvoyer tel quel
     // (c'est le cas quand les tests appellent parser.parse(content, filename))
     if (isLDrawContent(name)) {
@@ -59,6 +59,10 @@ export function createTestResolver(
     if (/ldconfig\.ldr$/i.test(lower)) {
       return defaultLdconfig;
     }
-    return subFiles[lower] ?? null;
+	if (subFiles[lower] != undefined) {
+		return subFiles[lower]
+	}
+
+	throw new Error(name + ' not found')
   };
 }

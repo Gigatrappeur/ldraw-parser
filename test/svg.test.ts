@@ -6,9 +6,10 @@
 import { describe, test, expect } from "bun:test";
 import { generateSvgThumbnail } from "../src/svg";
 import LDrawParser from "../src/index";
-import type { Vec3, LDrawColor, GeometryMesh, FlatGeometry } from "../src/types";
+import type { Vec3, GeometryMesh, FlatGeometry } from "../src/types";
 import { buildColorTable } from "./color-table";
 import { createTestResolver } from "./test-resolver";
+import type { LDrawColor } from "../src/colors";
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -68,6 +69,46 @@ function fillColorTable(geometry: FlatGeometry): FlatGeometry {
 function fills(svg: string): string[] {
   return [...svg.matchAll(/fill="(rgb\([^"]+\))"/g)].map((m) => m[1]!);
 }
+
+const CUBE_DATA = `
+0 Cube
+0 Name: cube.dat
+0 BFC CERTIFY CCW
+3 4 -5 -5 -5  5 -5 -5  5 5 -5
+3 4 -5 -5 -5  5 5 -5  -5 5 -5
+3 4 -5 5 -5  -5 -5 -5  5 -5 -5
+3 4 -5 5 -5  5 -5 -5  5 5 -5
+3 4 -5 -5 5  -5 -5 5  -5 5 5
+3 4 -5 -5 5  -5 5 5  5 5 5
+3 4 5 -5 5  5 -5 -5  5 5 -5
+3 4 5 -5 5  5 5 -5  5 5 5
+3 4 -5 -5 5  -5 -5 -5  -5 -5 5
+3 4 -5 -5 5  -5 -5 -5  -5 5 -5
+3 4 -5 5 5  -5 5 -5  5 5 5
+3 4 -5 5 5  5 5 5  5 5 -5
+`.trim();
+
+const T_DATA = `
+0 Simple Triangle
+0 Name: t.dat
+0 BFC CERTIFY CCW
+3 4 0 0 0 10 0 0 0 10 0
+`.trim();
+
+const T_TRANSPARENT_DATA = `
+0 Transparent Triangle
+0 Name: t.dat
+0 BFC CERTIFY CCW
+3 285 0 0 0 10 0 0 0 10 0
+`.trim();
+
+const T_EDGE_DATA = `
+0 Edge Triangle
+0 Name: t.dat
+0 BFC CERTIFY CCW
+2 0 0 0 0  10 0 0
+3 4 0 0 0 10 0 0 0 10 0
+`.trim();
 
 /** Count <path> elements */
 function pathCount(svg: string): number {
@@ -341,26 +382,26 @@ describe("Camera options", () => {
 
 describe("SVG from parser", () => {
   test("full parse → SVG produces valid output", async () => {
-    const parser = new LDrawParser({ resolveFile: createTestResolver() });
+    const parser = new LDrawParser({ resolveFile: createTestResolver({ "cube.dat": CUBE_DATA }) });
     const { geometry } = await parser.parse("cube.dat");
-    const svg = parser.toSvg(geometry!);
+    const svg = generateSvgThumbnail(geometry!);
     expect(svg).toStartWith("<svg");
     expect(svg).toContain("</svg>");
     expect(pathCount(svg)).toBeGreaterThan(0);
   });
 
   test("with twoSided=false, back-faces are culled", async () => {
-    const parser = new LDrawParser({ resolveFile: createTestResolver() });
+    const parser = new LDrawParser({ resolveFile: createTestResolver({ "cube.dat": CUBE_DATA }) });
     const { geometry } = await parser.parse("cube.dat");
-    const svgTwo  = parser.toSvg(geometry!, { twoSided: true  });
-    const svgOne  = parser.toSvg(geometry!, { twoSided: false });
+    const svgTwo  = generateSvgThumbnail(geometry!, { twoSided: true  });
+    const svgOne  = generateSvgThumbnail(geometry!, { twoSided: false });
     expect(pathCount(svgOne)).toBeLessThan(pathCount(svgTwo));
   });
 
   test("defaultColor=Red makes code-16 triangles use red shading", async () => {
-    const parser = new LDrawParser({ resolveFile: createTestResolver(), defaultColor: 4 });
+    const parser = new LDrawParser({ resolveFile: createTestResolver({ "t.dat": T_DATA }), defaultColor: 4 });
     const { geometry } = await parser.parse("t.dat");
-    const svg = parser.toSvg(geometry!, { twoSided: true });
+    const svg = generateSvgThumbnail(geometry!, { twoSided: true });
     const pathFills = fills(svg);
     // Red base color: r >> g, r >> b
     for (const f of pathFills) {
@@ -371,9 +412,9 @@ describe("SVG from parser", () => {
   });
 
   test("transparent color produces opacity < 1 in SVG", async () => {
-    const parser = new LDrawParser({ resolveFile: createTestResolver() });
+    const parser = new LDrawParser({ resolveFile: createTestResolver({ "t.dat": T_TRANSPARENT_DATA }) });
     const { geometry } = await parser.parse("t.dat");
-    const svg = parser.toSvg(geometry!, { twoSided: true });
+    const svg = generateSvgThumbnail(geometry!, { twoSided: true });
     const m = svg.match(/opacity="([\d.]+)"/);
     if (m) {
       expect(parseFloat(m[1]!)).toBeLessThan(1.0);
@@ -381,9 +422,9 @@ describe("SVG from parser", () => {
   });
 
   test("edge lines are rendered with correct color", async () => {
-    const parser = new LDrawParser({ resolveFile: createTestResolver() });
+    const parser = new LDrawParser({ resolveFile: createTestResolver({ "t.dat": T_EDGE_DATA }) });
     const { geometry } = await parser.parse("t.dat");
-    const svg = parser.toSvg(geometry!, { showEdges: true });
+    const svg = generateSvgThumbnail(geometry!, { showEdges: true });
     expect(svg).toContain("<line");
     expect(svg).toContain("stroke=");
   });

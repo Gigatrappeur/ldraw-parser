@@ -3,14 +3,44 @@
 // ============================================================
 
 // ── High-level convenience class ─────────────────────────────
-
-import { type LDrawParserOptions, type ResolverContext } from "./types";
 import { ColorTable } from "./colors";
-import { LDrawPart, loadLDrawModel } from "./resolver";
+import type { LDrawPart } from "./ldraw-part";
+import type { LDrawFile } from "./parser";
+import { loadLDrawModel, type ResolverContext } from "./resolver";
 import { SimpleFileResolver } from "./simple-resolver";
-import { generateSvgThumbnail, type SvgCameraOptions } from "./svg";
-import { generateGlbV2, exportGltf, type GlbOptionsV2, type GltfExportOptions } from "./glb2";
-import { generateObj, type ObjExportOptions } from "./obj";
+
+
+// ── Parser options ────────────────────────────────────────────
+
+export type LDrawParserOptions =
+	({
+		/**
+	     * Resolve sub-file content.
+	     * Called with the raw file name as written in the type-1 command.
+	     * Raise exception if the file cannot be found.
+	     */
+		resolveFile: (name: string) => Promise<string>;
+		resolveTexture?: (name: string) => Promise<Uint8Array>
+	}
+		| { libraryRoot: string }) &
+	{
+		/** Maximum recursion depth for sub-file references (default: 64) */
+		maxDepth?: number;
+
+		/**
+		 * Default color used for geometry that inherits from a parent (code 16)
+		 * when there is no parent — i.e. when parsing a standalone part file (.dat).
+		 *
+		 * Accepts any LDrawColor. Common choices:
+		 *   - table.get(71)  Light Bluish Grey  (LDraw viewer default)
+		 *   - table.get(15)  White
+		 *   - table.get(4)   Red
+		 *
+		 * Defaults to Light Bluish Grey (code 71) if omitted.
+		 */
+		defaultColor?: number;
+	}
+
 
 /**
  * High-level LDraw parser with built-in SVG/GLB/OBJ export.
@@ -24,90 +54,69 @@ import { generateObj, type ObjExportOptions } from "./obj";
  * ```
  */
 export default class LDrawParser {
-  private ctx: ResolverContext;
-  private opts: {
-    flatten: boolean;
-    keepRawLines: boolean;
-  };
-  private defaultColor: number;
+	private ctx: ResolverContext;
+	private defaultColor: number;
 
-  constructor(options: LDrawParserOptions) {
-    this.opts = {
-      flatten: options.flatten ?? true,
-      keepRawLines: options.keepRawLines ?? false,
-    };
-    
-    let partResolver, textureResolver;
-    if ('resolveFile' in options) {
-      partResolver = options.resolveFile
-      textureResolver = options.resolveTexture
-    } else {
-      const resolver = new SimpleFileResolver(options.libraryRoot)
-      partResolver = resolver.resolvePart
-      textureResolver = resolver.resolveTexture
-    }
-    
+	constructor(options: LDrawParserOptions) {
 
-    this.defaultColor = options.defaultColor ?? 71; // Light Bluish Grey
+		let partResolver, textureResolver;
+		if ('resolveFile' in options) {
+			partResolver = options.resolveFile
+			textureResolver = options.resolveTexture
+		} else {
+			const resolver = new SimpleFileResolver(options.libraryRoot)
+			partResolver = resolver.resolvePart
+			textureResolver = resolver.resolveTexture
+		}
 
-    this.ctx = {
-      colorTable: new ColorTable(partResolver),
-      resolveFile: partResolver,
-      resolverTexture: textureResolver,
-      processBFC: options.processBFC ?? true,
-      maxDepth: options.maxDepth ?? 64,
-      cache: new Map(),
-    };
-  }
 
-  /**
-   * Parse and resolve an LDraw model.
-   *
-   * @param name – file name (used to retrieve file in ldraw folder)
-   */
-  async parse(name: string, ctxOverride?: { defaultColor?: number }): Promise<LDrawPart> {
-    return loadLDrawModel(
-      name,
-      this.ctx,
-      this.opts.flatten,
-      await this.ctx.colorTable.get(ctxOverride?.defaultColor ?? this.defaultColor),
-    );
-  }
+		this.defaultColor = options.defaultColor ?? 71; // Light Bluish Grey
 
-  /** Clear the internal sub-file cache. */
-  clearCache(): void {
-    this.ctx.cache.clear();
-  }
+		this.ctx = {
+			colorTable: new ColorTable(partResolver),
+			resolveFile: partResolver,
+			resolverTexture: textureResolver,
+			maxDepth: options.maxDepth ?? 64,
+			cache: new Map(),
+		};
+	}
 
-  /** Read-only access to the colour table. */
-  get colorTable(): ColorTable {
-    return this.ctx.colorTable;
-  }
+	/**
+	 * Parse and resolve an LDraw model.
+	 *
+	 * @param name – file name (used to retrieve file in ldraw folder)
+	 */
+	async parse(name: string, ctxOverride?: { defaultColor?: number }): Promise<LDrawPart> {
+		return loadLDrawModel(
+			name,
+			this.ctx,
+			true,
+			await this.ctx.colorTable.get(ctxOverride?.defaultColor ?? this.defaultColor),
+		);
+	}
 
-  /** Generate an SVG thumbnail from parsed geometry. */
-  toSvg(geometry: NonNullable<Awaited<ReturnType<typeof loadLDrawModel>>["geometry"]>, options?: SvgCameraOptions): string {
-    return generateSvgThumbnail(geometry, options ?? {});
-  }
+	/**
+	 * Parse and resolve an LDraw model.
+	 *
+	 * @param name – file name (used to retrieve file in ldraw folder)
+	 */
+	async parseOnly(name: string, ctxOverride?: { defaultColor?: number }): Promise<LDrawFile> {
+		return loadLDrawModel(
+			name,
+			this.ctx,
+			false,
+			await this.ctx.colorTable.get(ctxOverride?.defaultColor ?? this.defaultColor),
+		);
+	}
 
-  /** Generate a GLB file from parsed geometry. */
-  async toGlb(geometry: NonNullable<Awaited<ReturnType<typeof loadLDrawModel>>["geometry"]>, options?: GlbOptionsV2): Promise<Uint8Array> {
-    return generateGlbV2(geometry, {loadTexture: this.ctx.resolverTexture, ...options});
-  }
+	/** Clear the internal sub-file cache. */
+	clearCache(): void {
+		this.ctx.cache.clear();
+	}
 
-  /**
-   * Generate a `.gltf` file (plain JSON). Returns the JSON string plus any
-   * external image bytes (when `inlineImages: false`).
-   */
-  async toGltf(
-    geometry: NonNullable<Awaited<ReturnType<typeof loadLDrawModel>>["geometry"]>,
-    options?: GlbOptionsV2 & GltfExportOptions,
-  ): Promise<{ gltf: string; images: Map<string, Uint8Array> }> {
-    return exportGltf(geometry, { loadTexture: this.ctx.resolverTexture, ...options });
-  }
+	/** Read-only access to the colour table. */
+	get colorTable(): ColorTable {
+		return this.ctx.colorTable;
+	}
 
-  /** Generate an OBJ file from parsed geometry. */
-  toObj(geometry: NonNullable<Awaited<ReturnType<typeof loadLDrawModel>>["geometry"]>, options?: ObjExportOptions): string {
-    const { obj, mtl } = generateObj(geometry, options ?? {});
-    return obj + "\n" + mtl;
-  }
 }

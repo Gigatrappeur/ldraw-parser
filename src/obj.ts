@@ -6,10 +6,10 @@
 // No external dependencies.
 // ============================================================
 
-import type { FlatGeometry, LDrawColor } from "./types";
-import type { SmoothGeometry } from "./normals";
-import { computeSmoothNormals } from "./normals";
+import { computeSmoothNormals, type SmoothGeometry } from "./normals";
 import { transformGeometry, lduToUnitScale, type LengthUnit } from "./postprocess";
+import type { LDrawColor } from "./colors";
+import type { FlatGeometry } from "./types";
 
 // ── Options ───────────────────────────────────────────────────
 

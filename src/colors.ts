@@ -3,15 +3,58 @@
 // Sourced from LDConfig.ldr (LDraw standard)
 // ============================================================
 
-import type { LDrawColor, LDrawColorFinish, LDrawMaterial } from "./types";
 
+// ── Colour ──────────────────────────────────────────────────
 
+type LDrawColorFinish =
+  | "CHROME"
+  | "PEARLESCENT"
+  | "RUBBER"
+  | "MATTE_METALLIC"
+  | "METAL"
+  | "MATERIAL"
+  | "GLITTER"
+  | "SPECKLE"
+  | "NORMAL";
+
+interface LDrawMaterial {
+  type: "GLITTER" | "SPECKLE";
+  value: string;           // hex colour of the particles
+  alpha?: number;          // 0-255
+  luminance?: number;      // 0-255
+  fraction: number;        // 0-1
+  vfraction: number;       // volume fraction 0-1
+  size?: number;
+  minsize?: number;
+  maxsize?: number;
+}
+
+export interface LDrawColor {
+  code: number;
+  name: string;
+  /** 0xRRGGBB */
+  value: number;
+  /** 0xRRGGBB */
+  edge: number;
+  /** 0-255 – 255 = fully opaque */
+  alpha: number;
+  luminance: number;
+  finish: LDrawColorFinish;
+  material?: LDrawMaterial;
+  /** Derived from alpha < 255 */
+  isTransparent: boolean;
+  /** Convenience RGBA tuple, each 0-1 */
+  rgba: [number, number, number, number];
+  /** Edge RGBA tuple, each 0-1 */
+  edgeRgba: [number, number, number, number];
+  hex: string
+}
 
 export class ColorTable {
   private colors: Map<number, LDrawColor>
-  private resolve: (name: string) => Promise<string | null | undefined>
+  private resolve: (name: string) => Promise<string>
 
-  constructor(resolve: (name: string) => Promise<string | null | undefined>) {
+  constructor(resolve: (name: string) => Promise<string>) {
     this.resolve = resolve;
     this.colors = new Map<number, LDrawColor>();
   }
@@ -20,20 +63,19 @@ export class ColorTable {
     if (this.colors.size > 0) return;
 
     const ldconfigContent = await this.resolve('../LDConfig.ldr')
-    if (ldconfigContent) {
-      for (const line of ldconfigContent.split(/\r?\n/)) {
-        const trimmed = line.trim();
-        if (/^0\s+!COLOUR\b/i.test(trimmed)) {
-          const color = parseColorDefinition(trimmed);
-          if (color) this.colors.set(color.code, color);
-        }
-      }
-    } else {
-      throw new Error("LDConfig.ldr not found in library root");
-    }
+	for (const line of ldconfigContent.split(/\r?\n/)) {
+		const trimmed = line.trim();
+		if (/^0\s+!COLOUR\b/i.test(trimmed)) {
+			const color = parseColorDefinition(trimmed);
+			if (color) {
+				this.colors.set(color.code, color);
+			}
+		}
+	}
   }
+
   add(color: LDrawColor): void {
-    if (!this.colors.has(color.code)) { 
+    if (!this.colors.has(color.code)) {
       this.colors.set(color.code, color);
     }
   }
@@ -89,7 +131,7 @@ function intToRgba(
   ];
 }
 
-function makeColor(
+export function makeColor(
   code: number,
   name: string,
   value: string,

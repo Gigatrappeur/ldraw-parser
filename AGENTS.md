@@ -9,7 +9,9 @@
 | Run tests | `bun test` |
 | Type check | `bun run tsc` |
 | Build (bundle) | `bun run build` → `dist/index.js`, `dist/cli.js` |
-| CLI example | `bun run src/cli.ts -f svg,glb --lib <ldraw-path> <file.ldr>` |
+| CLI example | `bun run src/cli.ts -f svg,glb --lib <ldraw-path> <file.dat>` |
+| Analyse GLB | `bun run src/cli.ts --analyse-glb <file.glb>` |
+| Analyse GLB (JSON) | `bun run src/cli.ts --analyse-glb --json <file.glb>` |
 
 ## Architecture
 - **Public API** : `LDrawParser` class in `src/index.ts`
@@ -22,6 +24,7 @@
   - `postprocess.ts` — unit conversion, merge, stats, LOD
   - `svg.ts` — isometric SVG thumbnail generation
   - `glb2.ts` — glTF 2.0 binary export (indexed, PBR, textures, transmission)
+  - `glb-analyser.ts` — GLB file analysis (metadata, meshes, materials, warnings)
   - `obj.ts` — Wavefront OBJ export
   - `serialise.ts` — LDraw file serialization
   - `steps.ts` — STEP assembly step generation
@@ -40,8 +43,9 @@
 ## Tests
 - Location: `test/*.test.ts`
 - Framework: `bun:test`
-- Coverage: parser, colours, geometry, BFC, TEXMAP, MPD, SVG, GLB, serialisation
+- Coverage: parser, colours, geometry, BFC, TEXMAP, MPD, SVG, GLB, GLB analyse, serialisation
 - Run single test: `bun test test/parser.test.ts`
+- Run GLB analyse tests: `bun test test/glb-analyse.test.ts`
 
 ## Build Quirks
 - `bun run build` uses `bun build` with splitting + minification

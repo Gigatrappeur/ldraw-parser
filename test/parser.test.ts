@@ -4,6 +4,8 @@
 
 import { describe, test, expect } from "bun:test";
 import LDrawParser from "../src/index";
+import { generateSvgThumbnail } from "../src/svg";
+import { generateGlbV2 } from "../src/glb2";
 import { buildColorTable } from "./color-table";
 import { createTestResolver, buildLdConfigContent } from "./test-resolver";
 import { parseLDrawFile } from "../src/parser";
@@ -52,15 +54,33 @@ const COLOUR_DEF = `
 0 !COLOUR Custom_Red CODE 1000 VALUE #FF0000 EDGE #000000 ALPHA 200
 `.trim();
 
+const SIMPLE_TRANSPARENT = `
+0 Transparent Triangle
+0 Name: trans.dat
+0 BFC CERTIFY CCW
+3 285 0 0 0 10 0 0 0 10 0
+`.trim();
+
+const TEX_DATA = `
+0 Tex Triangle
+0 Name: tex.dat
+0 !TEXMAP START PLANAR 0 0 0  10 0 0  0 0 10 texture.png
+0 BFC CERTIFY CCW
+3 4 0 0 0 10 0 0 0 10 0
+`.trim();
+
+const EMPTY_DATA = `
+0 Empty File
+0 Name: empty.dat
+`.trim();
+
 // ─────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────
 
 function makeParser(subFiles: Record<string, string> = {}) {
   return new LDrawParser({
-    resolveFile: createTestResolver(subFiles),
-    processBFC:  true,
-    flatten:     true,
+    resolveFile: createTestResolver(subFiles)
   });
 }
 
@@ -216,7 +236,7 @@ describe("Colour system", () => {
 
 describe("Geometry flattening", () => {
   test("produces triangles from type-3 commands", async () => {
-    const p = makeParser();
+    const p = makeParser({ "test.dat": SIMPLE_TRIANGLE });
     const { geometry } = await p.parse("test.dat");
     expect(geometry?.meshes.length).toBeGreaterThan(0);
     const total = geometry!.meshes.reduce((a, m) => a + m.triangles.length, 0);
@@ -224,21 +244,21 @@ describe("Geometry flattening", () => {
   });
 
   test("quad is split into 2 triangles", async () => {
-    const p = makeParser();
+    const p = makeParser({ "quad.dat": SIMPLE_QUAD });
     const { geometry } = await p.parse("quad.dat");
     const total = geometry!.meshes.reduce((a, m) => a + m.triangles.length, 0);
     expect(total).toBe(2);
   });
 
   test("transparent mesh has isTransparent flag on colour", async () => {
-    const p = makeParser();
+    const p = makeParser({ "trans.dat": SIMPLE_TRANSPARENT });
     const { geometry } = await p.parse("trans.dat");
     const meshes = geometry!.meshes;
     expect(meshes.some((m) => geometry!.colorTable?.get(m.colorCode)?.isTransparent)).toBe(true);
   });
 
   test("resolves embedded MPD sub-files", async () => {
-    const p = makeParser(); // sub-files are embedded in MPD
+    const p = makeParser({ "mpd_test.mpd": MPD_CONTENT });
     const { geometry } = await p.parse("mpd_test.mpd");
     const total = geometry!.meshes.reduce((a, m) => a + m.triangles.length, 0);
     expect(total).toBeGreaterThan(0);
@@ -246,14 +266,15 @@ describe("Geometry flattening", () => {
 
   test("resolves external sub-files via resolver", async () => {
     const subPart = `0 External Part\n0 BFC CERTIFY CCW\n3 16 0 0 0 10 0 0 5 10 0`;
-    const p = makeParser({ "part.dat": subPart });
+    const modelLdr = `0 External Model\n0 Name: model.ldr\n0 BFC CERTIFY CCW\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 part.dat`;
+    const p = makeParser({ "part.dat": subPart, "model.ldr": modelLdr });
     const { geometry } = await p.parse("model.ldr");
     const total = geometry!.meshes.reduce((a, m) => a + m.triangles.length, 0);
     expect(total).toBeGreaterThan(0);
   });
 
   test("AABB is computed", async () => {
-    const p = makeParser();
+    const p = makeParser({ "test.dat": SIMPLE_TRIANGLE });
     const { geometry } = await p.parse("test.dat");
     const { aabb } = geometry!;
     expect(aabb.size.x).toBeGreaterThan(0);
@@ -262,15 +283,15 @@ describe("Geometry flattening", () => {
 
   test("colour 16 inherits parent colour", async () => {
     const subPart = `0 Part\n0 BFC CERTIFY CCW\n3 16 0 0 0 10 0 0 5 10 0`;
-    const p = makeParser({ "inherit.dat": subPart });
-    // colour 4 = Red for the sub-file reference
+    const inheritLdr = `0 Inherit Test\n0 Name: inherit_test.ldr\n0 BFC CERTIFY CCW\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 inherit.dat`;
+    const p = makeParser({ "inherit.dat": subPart, "inherit_test.ldr": inheritLdr });
     const { geometry } = await p.parse("inherit_test.ldr");
     const mesh = geometry!.meshes[0];
     expect(mesh?.colorCode).toBe(4); // Red, inherited
   });
 
   test("texmap is attached to triangles", async () => {
-    const p = makeParser();
+    const p = makeParser({ "tex.dat": TEX_DATA });
     const { geometry } = await p.parse("tex.dat");
     const texturedMeshes = geometry!.meshes.filter((m) => m.texmap !== undefined);
     expect(texturedMeshes.length).toBeGreaterThan(0);
@@ -284,32 +305,32 @@ describe("Geometry flattening", () => {
 
 describe("SVG thumbnail", () => {
   test("generates valid SVG string", async () => {
-    const p = makeParser();
+    const p = makeParser({ "test.dat": SIMPLE_TRIANGLE });
     const { geometry } = await p.parse("test.dat");
-    const svg = p.toSvg(geometry!);
+    const svg = generateSvgThumbnail(geometry!);
     expect(svg).toStartWith("<svg");
     expect(svg).toContain("</svg>");
   });
 
   test("SVG respects width/height options", async () => {
-    const p = makeParser();
+    const p = makeParser({ "test.dat": SIMPLE_TRIANGLE });
     const { geometry } = await p.parse("test.dat");
-    const svg = p.toSvg(geometry!, { width: 256, height: 256 });
+    const svg = generateSvgThumbnail(geometry!, { width: 256, height: 256 });
     expect(svg).toContain('width="256"');
     expect(svg).toContain('height="256"');
   });
 
   test("SVG with background colour", async () => {
-    const p = makeParser();
+    const p = makeParser({ "test.dat": SIMPLE_TRIANGLE });
     const { geometry } = await p.parse("test.dat");
-    const svg = p.toSvg(geometry!, { background: "#ff0000" });
+    const svg = generateSvgThumbnail(geometry!, { background: "#ff0000" });
     expect(svg).toContain("ff0000");
   });
 
   test("empty geometry returns minimal SVG", async () => {
-    const p = makeParser();
+    const p = makeParser({ "empty.dat": EMPTY_DATA });
     const { geometry } = await p.parse("empty.dat");
-    const svg = p.toSvg(geometry!);
+    const svg = generateSvgThumbnail(geometry!);
     expect(svg).toContain("<svg");
   });
 });
@@ -320,42 +341,42 @@ describe("SVG thumbnail", () => {
 
 describe("GLB generator", () => {
   test("generates a Uint8Array", async () => {
-    const p = makeParser();
+    const p = makeParser({ "test.dat": SIMPLE_TRIANGLE });
     const { geometry } = await p.parse("test.dat");
-    const glb = await p.toGlb(geometry!);
+    const glb = await generateGlbV2(geometry!);
     expect(glb).toBeInstanceOf(Uint8Array);
     expect(glb.byteLength).toBeGreaterThan(100);
   });
 
   test("GLB starts with glTF magic number", async () => {
-    const p = makeParser();
+    const p = makeParser({ "test.dat": SIMPLE_TRIANGLE });
     const { geometry } = await p.parse("test.dat");
-    const glb = await p.toGlb(geometry!);
+    const glb = await generateGlbV2(geometry!);
     const view = new DataView(glb.buffer);
     // 0x46546C67 = "glTF"
     expect(view.getUint32(0, true)).toBe(0x46546c67);
   });
 
   test("GLB version is 2", async () => {
-    const p = makeParser();
+    const p = makeParser({ "test.dat": SIMPLE_TRIANGLE });
     const { geometry } = await p.parse("test.dat");
-    const glb = await p.toGlb(geometry!);
+    const glb = await generateGlbV2(geometry!);
     const view = new DataView(glb.buffer);
     expect(view.getUint32(4, true)).toBe(2);
   });
 
   test("total byte length is consistent", async () => {
-    const p = makeParser();
+    const p = makeParser({ "test.dat": SIMPLE_TRIANGLE });
     const { geometry } = await p.parse("test.dat");
-    const glb = await p.toGlb(geometry!);
+    const glb = await generateGlbV2(geometry!);
     const view = new DataView(glb.buffer);
     expect(view.getUint32(8, true)).toBe(glb.byteLength);
   });
 
   test("GLB contains materials for transparent colours", async () => {
-    const p = makeParser();
+    const p = makeParser({ "trans.dat": SIMPLE_TRANSPARENT });
     const { geometry } = await p.parse("trans.dat");
-    const glb = await p.toGlb(geometry!);
+    const glb = await generateGlbV2(geometry!);
     // Decode JSON chunk
     const jsonLength = new DataView(glb.buffer).getUint32(12, true);
     const jsonBytes  = glb.slice(20, 20 + jsonLength);

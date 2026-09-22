@@ -8,7 +8,6 @@ import { weldMesh, weldGeometry, mergeWeldedMeshes } from "../src/weld";
 import { smoothMeshNormals, computeSmoothNormals } from "../src/normals";
 import { generateGlbV2 } from "../src/glb2";
 import { generateObj } from "../src/obj";
-import type { LDrawColor } from "../src/types";
 import { LDrawError, LDrawParseError, LDrawResolveError, LDrawDepthError } from "../src/errors";
 import {
   transformGeometry,
@@ -25,6 +24,7 @@ import LDrawParser from "../src/index";
 import type { GeometryMesh, FlatGeometry, Vec3 } from "../src/types";
 import { buildColorTable } from "./color-table";
 import { createTestResolver } from "./test-resolver";
+import type { LDrawColor } from "../src/colors";
 
 // ─────────────────────────────────────────────────────────────
 // Fixtures
@@ -103,6 +103,24 @@ function makeFlatGeometry(meshes: GeometryMesh[]): FlatGeometry {
     },
   };
 }
+
+const CUBE_DATA = `
+0 Cube
+0 Name: cube.dat
+0 BFC CERTIFY CCW
+3 4 -5 -5 -5  5 -5 -5  5 5 -5
+3 4 -5 -5 -5  5 5 -5  -5 5 -5
+3 4 -5 5 -5  -5 -5 -5  5 -5 -5
+3 4 -5 5 -5  5 -5 -5  5 5 -5
+3 4 -5 -5 5  -5 -5 5  -5 5 5
+3 4 -5 -5 5  -5 5 5  5 5 5
+3 4 5 -5 5  5 -5 -5  5 5 -5
+3 4 5 -5 5  5 5 -5  5 5 5
+3 4 -5 -5 5  -5 -5 -5  -5 -5 5
+3 4 -5 -5 5  -5 -5 -5  -5 5 -5
+3 4 -5 5 5  -5 5 -5  5 5 5
+3 4 -5 5 5  5 5 5  5 5 -5
+`.trim();
 
 // ─────────────────────────────────────────────────────────────
 // Weld
@@ -673,7 +691,7 @@ describe("extractColorPalette + collectTextures", () => {
 
 describe("Full pipeline: parse → weld → GLB → JSON", () => {
   test("parse produces geometry", async () => {
-    const parser = new LDrawParser({ resolveFile: createTestResolver() });
+    const parser = new LDrawParser({ resolveFile: createTestResolver({ "cube.dat": CUBE_DATA }) });
     const { geometry } = await parser.parse("cube.dat");
     expect(geometry).toBeDefined();
     const stats = computeStats(geometry!);
@@ -681,7 +699,7 @@ describe("Full pipeline: parse → weld → GLB → JSON", () => {
   });
 
   test("GLB output is valid after full pipeline", async () => {
-    const parser = new LDrawParser({ resolveFile: createTestResolver() });
+    const parser = new LDrawParser({ resolveFile: createTestResolver({ "cube.dat": CUBE_DATA }) });
     const { geometry } = await parser.parse("cube.dat");
     const scale = lduToUnitScale("m");
     const geo = mergeGeometry(transformGeometry(geometry!, scale, true));

@@ -14,7 +14,8 @@
   "scripts": {
     "build": "bun build ./src/index.ts ./src/cli.ts --outdir=dist --target=bun --splitting --minify-syntax --minify-whitespace",
     "test": "bun test test/",
-    "tsc": "tsc"
+    "tsc": "tsc",
+	"typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/bun": "^1.3.11"

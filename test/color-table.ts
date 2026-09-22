@@ -4,53 +4,8 @@
 // LDraw library files – all colours are hardcoded).
 // ============================================================
 
-import type { LDrawColor as LDrawColorType, LDrawColorFinish, LDrawMaterial } from "../src/types";
+import { makeColor, type LDrawColor } from "../src/colors";
 
-export type LDrawColor = LDrawColorType;
-
-function hexToInt(hex: string): number {
-  return parseInt(hex.replace(/^#/, ""), 16);
-}
-
-function intToRgba(
-  value: number,
-  alpha: number,
-): [number, number, number, number] {
-  return [
-    ((value >> 16) & 0xff) / 255,
-    ((value >> 8) & 0xff) / 255,
-    (value & 0xff) / 255,
-    alpha / 255,
-  ];
-}
-
-function makeColor(
-  code: number,
-  name: string,
-  value: string,
-  edge: string,
-  alpha = 255,
-  luminance = 0,
-  finish: LDrawColorFinish = "NORMAL",
-  material?: LDrawMaterial,
-): LDrawColor {
-  const v = hexToInt(value);
-  const e = hexToInt(edge);
-  return {
-    code,
-    name,
-    value: v,
-    edge: e,
-    alpha,
-    luminance,
-    finish,
-    material,
-    isTransparent: alpha < 255,
-    rgba: intToRgba(v, alpha),
-    edgeRgba: intToRgba(e, 255),
-    hex: value,
-  };
-}
 
 const BUILTIN_COLORS: LDrawColor[] = [
   // ── Solid colours ──────────────────────────────────────────

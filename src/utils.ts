@@ -1,8 +1,9 @@
 // LDraw Parser – Matrix / geometry utilities
 // ============================================================
 
+import type { Matrix4, Vec3 } from "./types";
 
-import type { TexmapDefinition, Matrix4, Vec3, Vec2 } from "./types";
+
 
 // ── Matrix helpers ────────────────────────────────────────────
 
@@ -43,47 +44,27 @@ export function buildMatrix(
   ];
 }
 
-/** Multiply two column-major 4×4 matrices: result = a * b */
-export function multiplyMatrices(a: Matrix4, b: Matrix4): Matrix4 {
-  const out: number[] = new Array(16).fill(0);
-  for (let col = 0; col < 4; col++) {
-    for (let row = 0; row < 4; row++) {
-      let sum = 0;
-      for (let k = 0; k < 4; k++) {
-        sum += (a[k * 4 + row] ?? 0) * (b[col * 4 + k] ?? 0);
-      }
-      out[col * 4 + row] = sum;
-    }
-  }
-  return out as Matrix4;
+// export function transformVector(m: Matrix4, v: Vec3): Vec3 {
+//   return {
+//     x: m[0] * v.x + m[4] * v.y + m[8]  * v.z,
+//     y: m[1] * v.x + m[5] * v.y + m[9]  * v.z,
+//     z: m[2] * v.x + m[6] * v.y + m[10] * v.z,
+//   };
+// }
+
+
+// ── Token helpers ─────────────────────────────────────────────
+
+export function tok(parts: string[], i: number): string {
+	return parts[i] ?? "";
 }
 
-/** Apply a column-major 4×4 to a Vec3 (w=1) */
-export function transformPoint(m: Matrix4, v: Vec3): Vec3 {
-  const x = m[0] * v.x + m[4] * v.y + m[8]  * v.z + m[12];
-  const y = m[1] * v.x + m[5] * v.y + m[9]  * v.z + m[13];
-  const z = m[2] * v.x + m[6] * v.y + m[10] * v.z + m[14];
-  return { x, y, z };
+export function num(parts: string[], i: number): number {
+	return parseFloat(tok(parts, i)) || 0;
 }
 
-export function transformVector(m: Matrix4, v: Vec3): Vec3 {
-  return {
-    x: m[0] * v.x + m[4] * v.y + m[8]  * v.z,
-    y: m[1] * v.x + m[5] * v.y + m[9]  * v.z,
-    z: m[2] * v.x + m[6] * v.y + m[10] * v.z,
-  };
-}
-
-/**
- * Return the determinant of the 3×3 rotation sub-matrix.
- * Negative determinant means the matrix includes a reflection → invert winding.
- */
-export function matrixDeterminant3(m: Matrix4): number {
-  return (
-    m[0] * (m[5] * m[10] - m[9] * m[6]) -
-    m[4] * (m[1] * m[10] - m[9] * m[2]) +
-    m[8] * (m[1] * m[6]  - m[5] * m[2])
-  );
+export function vec(parts: string[], i: number): Vec3 {
+	return { x: num(parts, i), y: num(parts, i + 1), z: num(parts, i + 2) };
 }
 
 // ── Vec3 helpers ──────────────────────────────────────────────
@@ -170,49 +151,6 @@ export function aabbFinalize(box: AABB) {
   return { ...box, center, size, radius };
 }
 
-// ── TEXMAP UV projection ──────────────────────────────────────
-
-/** Project a world-space point onto UV coordinates using the TEXMAP definition */
-export function projectTexmap(
-  def: TexmapDefinition,
-  point: Vec3,
-): Vec2 {
-  if (def.projection === "PLANAR") {
-    const { point1, point2, point3 } = def;
-    const u_vec = vec3Sub(point2, point1);
-    const v_vec = vec3Sub(point3, point1);
-    const rel   = vec3Sub(point, point1);
-    const u = vec3Dot(rel, u_vec) / vec3LengthSq(u_vec);
-    const v = vec3Dot(rel, v_vec) / vec3LengthSq(v_vec);
-    return { u, v };
-  }
-
-  if (def.projection === "CYLINDRICAL") {
-    const { point1, point2, point3, angle } = def;
-    const axis = vec3Normalize(vec3Sub(point2, point1));
-    const ref  = vec3Normalize(vec3Sub(point3, point1));
-    const rel  = vec3Sub(point, point1);
-    const v    = vec3Dot(rel, axis) / vec3Length(vec3Sub(point2, point1));
-    const proj = vec3Sub(rel, { x: axis.x * v, y: axis.y * v, z: axis.z * v });
-    let theta  = Math.atan2(vec3Dot(proj, vec3Cross(axis, ref)), vec3Dot(proj, ref));
-    if (theta < 0) theta += 2 * Math.PI;
-    const u = theta / ((angle * Math.PI) / 180);
-    return { u, v };
-  }
-
-  // SPHERICAL
-  const { point1, point2, point3, angle1, angle2 } = def as { point1: Vec3; point2: Vec3; point3: Vec3; angle1: number; angle2: number; texture: string };
-  const axis = vec3Normalize(vec3Sub(point2, point1));
-  const ref  = vec3Normalize(vec3Sub(point3, point1));
-  const rel  = vec3Normalize(vec3Sub(point, point1));
-  const phi  = Math.acos(Math.max(-1, Math.min(1, vec3Dot(rel, axis))));
-  const side = vec3Sub(rel, { x: axis.x * vec3Dot(rel, axis), y: axis.y * vec3Dot(rel, axis), z: axis.z * vec3Dot(rel, axis) });
-  let theta  = Math.atan2(vec3Dot(side, vec3Cross(axis, ref)), vec3Dot(side, ref));
-  if (theta < 0) theta += 2 * Math.PI;
-  const u = theta / ((angle1 * Math.PI) / 180);
-  const v = phi   / ((angle2 * Math.PI) / 180);
-  return { u, v };
-}
 
 // ── Normalise file names for resolution ──────────────────────
 
