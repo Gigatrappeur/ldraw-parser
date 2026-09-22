@@ -251,10 +251,9 @@ function computeAABB(
 
 // ── Main Analyser ─────────────────────────────────────────────
 
-export function analyseGlb(buffer: Uint8Array, options: AnalyserOptions = {}): GlbAnalysisResult {
+export function analyseGlb(buffer: Uint8Array, _options?: AnalyserOptions): GlbAnalysisResult {
   const warnings: string[] = [];
   const dv = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-  const verbose = options.verbose ?? false;
 
   // ── Header ──────────────────────────────────────────────
   if (buffer.byteLength < 12) {
@@ -285,10 +284,6 @@ export function analyseGlb(buffer: Uint8Array, options: AnalyserOptions = {}): G
     const chunkType = dv.getUint32(offset + 4, true);
     const typeString = chunkType === CHUNK_TYPE_JSON ? "JSON" : chunkType === CHUNK_TYPE_BIN ? "BIN\0" : `0x${chunkType.toString(16).padStart(8, "0")}`;
     chunks.push({ length: chunkLength, type: chunkType, typeString });
-
-    if (verbose) {
-      console.log(`  Chunk: ${typeString} ${fmtBytes(chunkLength)} (offset ${offset + 8})`);
-    }
 
     offset += 8 + chunkLength;
   }

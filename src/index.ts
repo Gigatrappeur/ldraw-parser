@@ -2,13 +2,26 @@
 // LDraw Parser – Public API
 // ============================================================
 
-// ── High-level convenience class ─────────────────────────────
+// ── Internal imports ─────────────────────────────────────────
 import { ColorTable } from "./colors";
-import type { LDrawPart } from "./ldraw-part";
+import { LDrawPart } from "./ldraw-part";
 import type { LDrawFile } from "./parser";
 import { loadLDrawModel, type ResolverContext } from "./resolver";
 import { SimpleFileResolver } from "./simple-resolver";
 
+// ── Public re-exports ────────────────────────────────────────
+export { ColorTable, LDrawPart, SimpleFileResolver };
+export type { LDrawFile } from "./parser";
+export type {
+	ColorUsage,
+	GeometryStats,
+	LengthUnit,
+} from "./postprocess";
+export type {
+	FlatGeometry,
+	GeometryMesh,
+	GeometryVertex,
+} from "./types";
 
 // ── Parser options ────────────────────────────────────────────
 
@@ -43,14 +56,16 @@ export type LDrawParserOptions =
 
 
 /**
- * High-level LDraw parser with built-in SVG/GLB/OBJ export.
+ * High-level LDraw parser with built-in SVG/GLB export.
  *
  * @example
  * ```ts
+ * import LDrawParser from "ldraw-parser";
+ *
  * const parser = new LDrawParser({ libraryRoot: "/path/to/ldraw" });
  * const part = await parser.parse("3626b.dat");
- * const svg = parser.toSvg(part.geometry);
- * const glb = await parser.toGlb(part.geometry);
+ * const svg = part.toSvg({ azimuth: 45, elevation: 30 });
+ * const glb = await part.toGlb();
  * ```
  */
 export default class LDrawParser {

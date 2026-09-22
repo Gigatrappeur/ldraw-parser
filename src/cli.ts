@@ -239,35 +239,22 @@ async function processFile(
 	}
 
 	// ── GLTF ───────────────────────────────────────────────────
-	// TODO compliqué à meintenir
-	// if (opts.formats.has("gltf")) {
-	// 	const t1 = performance.now();
-	// 	const unit = opts.unit as LengthUnit;
-	// 	part.toGltf({
-	// 		normals: true,
-	// 		weld: opts.smooth
-	// 			? { smoothNormals: true, creasAngle: opts.creaseAngle }
-	// 			: { smoothNormals: false }
-	// 	})
-	// 	const scale = unit === "ldu" ? 1 : lduToUnitScale(unit);
-	// 	const geoForGltf = opts.merge
-	// 		? mergeGeometry(transformGeometry(geometry, scale, true))
-	// 		: transformGeometry(geometry, scale, true);
-	// 	const { gltf, images } = await exportGltf(geoForGltf, {
-	// 		name: stem,
-	// 		normals: true,
-	// 		weld: opts.smooth
-	// 			? { smoothNormals: true, creasAngle: opts.creaseAngle }
-	// 			: { smoothNormals: false },
-	// 	});
-	// 	const outPath = join(outDir, `${stem}.gltf`);
-	// 	await bunWrite(outPath, gltf);
-	// 	if (images.size > 0) {
-	// 		for (const [name, bytes] of images) await bunWrite(join(outDir, name), bytes);
-	// 	}
-	// 	const dt = (performance.now() - t1).toFixed(1);
-	// 	console.log(`  ✓ GLTF → ${outPath}  (${fmtBytes(gltf.length)}, ${dt} ms)`);
-	// }
+	if (opts.formats.has("gltf")) {
+		const t1 = performance.now();
+		const { gltf, images } = await part.toGltf({
+			normals: true,
+			weld: opts.smooth
+				? { smoothNormals: true, creasAngle: opts.creaseAngle }
+				: { smoothNormals: false }
+		});
+		const outPath = join(outDir, `${stem}.gltf`);
+		await bunWrite(outPath, gltf);
+		if (images.size > 0) {
+			for (const [name, bytes] of images) await bunWrite(join(outDir, name), bytes);
+		}
+		const dt = (performance.now() - t1).toFixed(1);
+		console.log(`  ✓ GLTF → ${outPath}  (${fmtBytes(gltf.length)}, ${dt} ms)`);
+	}
 
 	// ── SVG ──────────────────────────────────────────────────
 	if (opts.formats.has("svg")) {
@@ -284,23 +271,6 @@ async function processFile(
 		const dt = (performance.now() - t1).toFixed(1);
 		console.log(`  ✓ SVG  → ${outPath}  (${fmtBytes(svg.length)}, ${dt} ms)`);
 	}
-
-	// ── OBJ ──────────────────────────────────────────────────
-	// TODO pas d'usage
-	// if (opts.formats.has("obj")) {
-	// 	const t1 = performance.now();
-	// 	part.toObj() ?
-	// 	const { obj, mtl, mtlFileName } = generateObj(geometry, {
-	// 		name: stem,
-	// 		unit: opts.unit as any,
-	// 		normals: opts.smooth,
-	// 		creaseAngle: opts.creaseAngle,
-	// 	});
-	// 	await bunWrite(join(outDir, `${stem}.obj`), obj);
-	// 	await bunWrite(join(outDir, mtlFileName), mtl);
-	// 	const dt = (performance.now() - t1).toFixed(1);
-	// 	console.log(`  ✓ OBJ  → ${join(outDir, stem + ".obj")}  (${fmtBytes(obj.length + mtl.length)}, ${dt} ms)`);
-	// }
 
 	// ── JSON (geometry + metadata) ───────────────────────────
 	if (opts.formats.has("json")) {

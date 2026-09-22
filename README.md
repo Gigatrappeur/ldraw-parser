@@ -1,74 +1,107 @@
 # ldraw-parser
 
-Parser TypeScript complet pour les fichiers LDraw (.ldr / .mpd / .dat), conçu pour les backends **Bun**.  
-Aucune dépendance runtime. Génère directement des fichiers **GLB** (glTF 2.0) et des **thumbnails SVG**.
+Parser TypeScript pour fichiers LDraw (.dat / .ldr / .mpd), avec export **GLB** (glTF 2.0), **GLTF** et **SVG**. Aucune dépendance runtime.
+
+<!-- toc -->
+
+- [Fonctionnalités](#fonctionnalités)
+- [Installation](#installation)
+- [Utilisation](#utilisation)
+- [API](#api)
+  - [`LDrawParser`](#ldrawparser)
+  - [`LDrawPart`](#ldrawpart)
+  - [`SimpleFileResolver`](#simplefileresolver)
+- [CLI](#cli)
+- [Types principaux](#types-principaux)
+- [Unités LDraw](#unités-ldraw)
+- [Tests](#tests)
+- [Structure du projet](#structure-du-projet)
+- [Licence](#licence)
+
+<!-- tocstop -->
 
 ---
 
 ## Fonctionnalités
 
-| Domaine | Détail |
-|---|---|
-| **Types 0–5** | Commentaires, sub-file refs, lignes, triangles, quads, optional lines |
-| **Métadonnées** | `description`, `name`, `author`, `!LDRAW_ORG`, `!CATEGORY`, `!KEYWORDS`, `!LICENSE`, `!HISTORY`, `!HELP`, `!CMDLINE` |
-| **Couleurs** | Table complète 200+ codes officiels, transparence (alpha < 255), finitions CHROME / METAL / PEARLESCENT / RUBBER / MATTE_METALLIC / MATERIAL (GLITTER/SPECKLE) |
-| **BFC** | Certification CW/CCW, `INVERTNEXT`, `CLIP`/`NOCLIP`, propagation aux enfants, inversion sur réflexion matricielle |
-| **TEXMAP** | Projections PLANAR / CYLINDRICAL / SPHERICAL, pile de TEXMAP imbriqués, calcul des UVs |
-| **MPD** | Extraction et parsing des sous-fichiers `0 FILE`, résolution externe async |
-| **Résolveur FS** | Résolution case-insensitive, ordre de recherche LDraw standard, cache mémoire |
-| **Post-process** | Conversion d'unités (LDU→m/mm/cm/in/studs), merge de meshes, statistiques, palette de couleurs |
-| **GLB** | glTF 2.0 binaire pur, matériaux PBR, normales flat, UVs, transparence BLEND/MASK |
-| **SVG** | Projection isométrique paramétrable, Lambert shading, painter's algorithm, transparence |
+- Parsing complet des types LDraw **0–5** (commentaires, références, triangles, quads, lignes optionnelles)
+- Métadonnées : `description`, `name`, `author`, `!LDRAW_ORG`, `!CATEGORY`, `!KEYWORDS`, `!LICENSE`, `!HISTORY`, `!HELP`, `!CMDLINE`
+- Table de couleurs **200+ codes officiels** LDraw, avec transparence (alpha < 255) et finitions (CHROME, METAL, PEARLESCENT, RUBBER, MATTE_METALLIC, GLITTER, SPECKLE)
+- Support **BFC** : certification CW/CCW, `INVERTNEXT`, `CLIP`/`NOCLIP`, inversion sur réflexion matricielle
+- Support **TEXMAP** : projections PLANAR / CYLINDRICAL / SPHERICAL, piles imbriquées, calcul UVs
+- Support **MPD** : sous-fichiers `0 FILE`, résolution externe async
+- Résolution de sous-fichiers **case-insensitive** avec cache mémoire
+- Export **GLB** (glTF 2.0 binaire) avec matériaux PBR, normales lissées ou flat, UVs, transparence, textures
+- Export **GLTF** (JSON + images)
+- Export **SVG** : thumbnail isométrique avec Lambert shading, painter's algorithm, transparence
+- Post-processing : conversion d'unités (LDU → m/mm/cm/in/studs), merge de meshes, statistiques, palette de couleurs
 
 ---
 
 ## Installation
 
 ```bash
-# Copier la librairie dans votre projet
-cp -r ldraw-parser/ your-project/libs/
+# Avec npm (dev dependency uniquement, pour TypeScript)
+npm install --save-dev typescript @types/node @types/bun
 
-# Ou avec npm link / workspace
+# Ou avec bun
+bun add -d typescript @types/node @types/bun
 ```
 
-### Prérequis
-
-- **Bun** ≥ 1.0 (pour le résolveur filesystem et les exemples)
-- **TypeScript** ≥ 5.0 (pour la compilation)
+Le parser lui-même n'a **aucune dépendance runtime** — il suffit de copier les fichiers `src/` dans votre projet.
 
 ---
 
-## Démarrage rapide
+## Utilisation
 
 ```ts
-import { LDrawParser, createFilesystemResolver, loadLdConfig } from "./ldraw-parser/src/index.js";
+import LDrawParser from "./src/index";
 
-// 1. Créer le résolveur (pointe vers votre installation LDraw)
-const resolver = createFilesystemResolver({ libraryRoot: "/usr/share/ldraw" });
+// 1. Créer le parser avec la racine de la bibliothèque LDraw
+const parser = new LDrawParser({ libraryRoot: "/usr/share/ldraw" });
 
-// 2. Charger la table de couleurs officielle
-const ldconfig = await loadLdConfig("/usr/share/ldraw");
+// 2. Parser un fichier (résout automatiquement les sous-fichiers)
+const part = await parser.parse("3024.dat");
 
-// 3. Créer le parser
-const parser = new LDrawParser({ resolveFile: resolver });
-if (ldconfig) parser.loadColorTable(ldconfig);
+// 3. Lire les métadonnées
+console.log(part.file.meta.description);  // "Brick 2 x 4"
+console.log(part.file.meta.author);       // "The LEGO Group"
 
-// 4. Parser un modèle
-const content = await Bun.file("mon-modele.ldr").text();
-const { file, geometry } = await parser.parse(content, "mon-modele.ldr");
+// 4. Statistiques géométriques
+const stats = part.stats();
+console.log(`Triangles: ${stats.triangleCount}, Couleurs: ${stats.colorCount}`);
 
-// 5. Lire les métadonnées
-console.log(file.meta.description);   // "Voiture Rouge"
-console.log(file.meta.keywords);      // ["vehicle", "car", "red"]
-console.log(file.meta.category);      // "Vehicle"
+// 5. Export GLB (par défaut en mètres, Y-up glTF)
+const glb = await part.toGlb();
+await Bun.write("model.glb", glb);
 
-// 6. Générer un thumbnail SVG
-const svg = parser.toSvg(geometry!, { azimuth: 45, elevation: 30, width: 512 });
+// 6. Export SVG thumbnail
+const svg = part.toSvg({ azimuth: 45, elevation: 30, width: 512 });
 await Bun.write("thumbnail.svg", svg);
 
-// 7. Générer un fichier GLB (unités en mètres, Y-up pour glTF)
-const glb = parser.toGlb(geometry!, {}, "m");
-await Bun.write("model.glb", glb);
+// 7. Palette de couleurs utilisée
+const palette = part.palette();
+// [{ color, triangleCount, isTransparent }, ...]
+```
+
+### Résolution personnalisée
+
+Si vous ne pouvez pas utiliser un dossier LDraw local, fournissez votre propre résolveur :
+
+```ts
+const parser = new LDrawParser({
+  resolveFile: async (name: string) => {
+    // Récupérer depuis un serveur distant, une base de données, etc.
+    const response = await fetch(`https://example.com/parts/${name}`);
+    return await response.text();
+  },
+  resolveTexture: async (name: string) => {
+    const response = await fetch(`https://example.com/textures/${name}`);
+    return new Uint8Array(await response.arrayBuffer());
+  },
+});
+
+const part = await parser.parse("3024.dat");
 ```
 
 ---
@@ -77,7 +110,7 @@ await Bun.write("model.glb", glb);
 
 ### `LDrawParser`
 
-Classe principale, point d'entrée de haut niveau.
+Classe principale, point d'entrée pour parser les fichiers LDraw.
 
 ```ts
 const parser = new LDrawParser(options?: LDrawParserOptions);
@@ -87,150 +120,166 @@ const parser = new LDrawParser(options?: LDrawParserOptions);
 
 | Propriété | Type | Défaut | Description |
 |---|---|---|---|
-| `resolveFile` | `(name: string) => Promise<string \| null>` | `() => null` | Callback de résolution des sous-fichiers |
-| `colorTable` | `Map<number, LDrawColor>` | table intégrée | Table de couleurs personnalisée |
-| `processBFC` | `boolean` | `true` | Traiter les directives BFC |
-| `flatten` | `boolean` | `true` | Aplatir la géométrie récursivement |
-| `keepRawLines` | `boolean` | `false` | Conserver les lignes brutes dans `LDrawFile.rawLines` |
-| `maxDepth` | `number` | `64` | Profondeur de récursion max pour les sous-fichiers |
+| `libraryRoot` | `string` | — | Racine du dossier LDraw (recherche dans `parts/` et `p/`) |
+| `resolveFile` | `(name: string) => Promise<string>` | — | Callback personnalisé pour lire les sous-fichiers |
+| `resolveTexture` | `(name: string) => Promise<Uint8Array>` | — | Callback personnalisé pour lire les textures |
+| `defaultColor` | `number` | `71` | Couleur par défaut pour les parties qui héritent du parent (code 16) |
+| `maxDepth` | `number` | `64` | Profondeur max de récursion pour les sous-fichiers |
 
 #### Méthodes
 
 ```ts
-// Parser + résoudre un modèle complet
-parse(content: string, name?: string): Promise<{ file: LDrawFile; geometry?: FlatGeometry }>
+// Parser + résoudre un modèle complet (avec géométrie aplatie)
+parse(name: string, ctxOverride?: { defaultColor?: number }): Promise<LDrawPart>
 
-// Parser uniquement (pas de résolution de sous-fichiers)
-parseOnly(content: string, name?: string): LDrawFile
+// Parser uniquement, sans résolution des sous-fichiers
+parseOnly(name: string, ctxOverride?: { defaultColor?: number }): Promise<LDrawFile>
 
-// Générer SVG
-toSvg(geometry: FlatGeometry, options?: SvgCameraOptions): string
-
-// Générer GLB (unit: "ldu"|"mm"|"cm"|"m"|"in"|"studs", défaut "m")
-toGlb(geometry: FlatGeometry, options?: GlbOptions, unit?: LengthUnit, merge?: boolean): Uint8Array
-
-// Statistiques géométriques
-stats(geometry: FlatGeometry): GeometryStats
-
-// Palette de couleurs utilisées
-palette(geometry: FlatGeometry): ColorUsage[]
-
-// Textures référencées via TEXMAP
-textures(geometry: FlatGeometry): string[]
-
-// Charger LDConfig.ldr
-loadColorTable(ldconfigContent: string): void
-
-// Vider le cache de résolution
+// Vider le cache interne des sous-fichiers
 clearCache(): void
+
+// Accéder à la table de couleurs
+get colorTable(): ColorTable
 ```
 
 ---
 
-### Résolveur filesystem
+### `LDrawPart`
+
+Résultat d'un parsing complet. Contient le fichier parsé et la géométrie aplatie.
 
 ```ts
-import { createFilesystemResolver, createProjectResolver, loadLdConfig, warmResolverCache } from "./ldraw-parser/src/index.js";
+const part = await parser.parse("3024.dat");
+```
 
-// Résolveur standard (cherche dans parts/, p/, p/48/, etc.)
-const resolver = createFilesystemResolver({
-  libraryRoot: "/usr/share/ldraw",    // ou variable LDRAW_LIB
-  extraPaths:  ["./my-unofficial"],   // dossiers additionnels en tête de liste
-  cacheContent: true,                 // cache mémoire du contenu (défaut: true)
-});
+| Méthode | Retour | Description |
+|---|---|---|
+| `toGlb(options?, unit?, merge?)` | `Promise<Uint8Array>` | Export GLB binaire (glTF 2.0) |
+| `toGltf(options?)` | `Promise<{ gltf: string; images: Map<string, Uint8Array> }>` | Export GLTF JSON + textures |
+| `toSvg(options?)` | `string` | Thumbnail SVG isométrique |
+| `stats()` | `GeometryStats` | Statistiques géométriques |
+| `palette()` | `ColorUsage[]` | Palette de couleurs triée par usage |
+| `textures()` | `string[]` | Fichiers textures référencés via TEXMAP |
 
-// Résolveur projet (cherche d'abord dans le dossier du MPD)
-const projectResolver = createProjectResolver(
-  "./models/my-project/",             // dossier contenant le .mpd
-  { libraryRoot: "/usr/share/ldraw" }
+#### Options d'export GLB
+
+```ts
+await part.toGlb(
+  {
+    normals: true,           // normales lissées (default: true)
+    weld: true | { smoothNormals: true, creasAngle: 45 },
+    merge: true,             // fusionner les meshes par couleur (default: true)
+  },
+  "m",                     // unité: "ldu" \| "mm" \| "cm" \| "m" \| "in" \| "studs"
+  true                     // merge (default: true)
 );
-
-// Pré-chauffer les index de répertoires au démarrage
-await warmResolverCache("/usr/share/ldraw");
-
-// Charger LDConfig.ldr
-const ldconfig = await loadLdConfig("/usr/share/ldraw");
 ```
 
-L'ordre de recherche standard est :
-1. Chemins `extraPaths` (dans l'ordre)
-2. `<root>/` (racine)
-3. `<root>/models/`
-4. `<root>/parts/`
-5. `<root>/parts/s/` (sub-parts)
-6. `<root>/p/`
-7. `<root>/p/48/`
-8. `<root>/p/8/`
-9. `<root>/unofficial/parts/`
-10. `<root>/unofficial/p/`
-
-La résolution est **case-insensitive** (important sous Linux où `stud.dat` et `Stud.dat` sont différents).
-
----
-
-### Post-processing
+#### Options SVG
 
 ```ts
-import {
-  transformGeometry,
-  mergeGeometry,
-  cullSmallTriangles,
-  computeStats,
-  extractColorPalette,
-  collectTextures,
-  lduToUnitScale,
-} from "./ldraw-parser/src/index.js";
-
-// Convertir en mètres + Y-up (pour glTF)
-const geo = transformGeometry(geometry, lduToUnitScale("m"), true);
-
-// Fusionner les meshes de même couleur (réduit les draw calls)
-const merged = mergeGeometry(geometry);
-
-// Supprimer les micro-triangles (LOD)
-const lod = cullSmallTriangles(geometry, 0.1); // minArea en LDU²
-
-// Statistiques
-const stats = computeStats(geometry);
-// { triangleCount, vertexCount, edgeCount, colorCount, estimatedBytes, aabb }
-
-// Palette triée par usage
-const palette = extractColorPalette(geometry);
-// [{ color, triangleCount, isTransparent }, ...]
-
-// Textures TEXMAP
-const textures = collectTextures(geometry);
-// ["texture.png", "gloss.png"]
+part.toSvg({
+  azimuth: 45,             // angle azimutal en degrés (default: 45)
+  elevation: 30,           // angle d'élévation en degrés (default: 30)
+  width: 512,              // largeur en pixels (default: 512)
+  height: 512,             // hauteur en pixels (default: 512)
+  showEdges: false,        // afficher les arêtes (default: false)
+});
 ```
 
 ---
 
-### Types principaux
+### `SimpleFileResolver`
+
+Résolveur de fichiers basé sur l'API `Bun.file()`. Non compatible Node.js.
+
+```ts
+import { SimpleFileResolver } from "./src/simple-resolver";
+
+const resolver = new SimpleFileResolver("/usr/share/ldraw");
+const content = await resolver.resolvePart("3024.dat");
+const texture = await resolver.resolveTexture("some_texture.png");
+```
+
+---
+
+## CLI
+
+Convertisseur batch LDraw → GLB / SVG / JSON via la CLI.
+
+```bash
+# Conversion avec la bibliothèque LDraw
+bun run src/cli.ts --lib <path-to-ldraw> -f glb,svg model.ldr
+
+# Analyse d'un fichier GLB
+bun run src/cli.ts --analyse-glb model.glb
+bun run src/cli.ts --analyse-glb --json model.glb
+
+# Stats uniquement
+bun run src/cli.ts --lib <path-to-ldraw> --stats model.ldr
+
+# Options disponibles
+bun run src/cli.ts --help
+```
+
+| Option | Description |
+|---|---|
+| `-o, --out <dir>` | Répertoire de sortie (default: `./out`) |
+| `-f, --format <list>` | Formats : `glb,gltf,svg,json` (default: `glb,svg`) |
+| `--unit <unit>` | Unité de sortie : `ldu\|mm\|cm\|m\|in\|studs` (default: `m`) |
+| `--lib, --library <p>` | Racine de la bibliothèque LDraw (`env: LDRAW_LIB`) |
+| `--svg-size <px>` | Taille du thumbnail SVG (default: `512`) |
+| `--az <deg>` | Azimut de la caméra SVG (default: `45`) |
+| `--el <deg>` | Élévation de la caméra SVG (default: `30`) |
+| `--crease <deg>` | Angle de crête pour normales lissées (default: `45`) |
+| `--no-smooth` | Désactiver les normales lissées |
+| `--no-merge` | Ne pas fusionner les meshes par couleur |
+| `--stats` | Afficher les statistiques uniquement, sans sortie |
+| `--color <spec>` | Forcer la couleur principale (code LDraw, hex, ou nom) |
+| `--analyse-glb` | Analyser un fichier GLB au lieu de parser du LDraw |
+| `--json` | Sortie JSON (pour `--analyse-glb`) |
+| `-v, --verbose` | Log détaillé |
+
+Exemples :
+
+```bash
+# Convertir un fichier avec une couleur personnalisée
+bun run src/cli.ts --lib /usr/share/ldraw --color 4 model.dat
+
+# Convertir avec une couleur hexadécimale
+bun run src/cli.ts --lib /usr/share/ldraw --color "#FF6600" -f glb,svg model.ldr
+
+# Analyser un GLB
+bun run src/cli.ts --analyse-glb model.glb
+```
+
+---
+
+## Types principaux
 
 #### `LDrawFile`
 
 ```ts
 interface LDrawFile {
-  name:      string;
-  meta:      LDrawFileMeta;       // description, keywords, BFC, etc.
-  commands:  LDrawCommand[];      // type 0–5
-  subFiles?: Map<string, LDrawFile>; // fichiers MPD embarqués
-  rawLines?: string[];
+  name: string;
+  meta: LDrawFileMeta;
+  commands: LDrawCommand[];
+  subFiles?: Map<string, LDrawFile>;
 }
 
 interface LDrawFileMeta {
   description?: string;
-  name?:        string;
-  author?:      string;
-  fileType?:    LDrawFileType;
-  license?:     string;
-  category?:    string;
-  keywords?:    string[];
-  help?:        string[];
-  history?:     Array<{ date: string; author: string; description: string }>;
-  colors?:      LDrawColor[];
+  name?: string;
+  author?: string;
+  fileType?: LDrawFileType;
+  license?: string;
+  category?: string;
+  keywords?: string[];
+  help?: string[];
+  history?: Array<{ date: string; author: string; description: string }>;
+  colors?: LDrawColor[];
   bfcCertified?: boolean;
-  bfcWinding?:   "CW" | "CCW";
+  bfcWinding?: "CW" | "CCW";
 }
 ```
 
@@ -238,17 +287,17 @@ interface LDrawFileMeta {
 
 ```ts
 interface LDrawColor {
-  code:          number;
-  name:          string;
-  value:         number;         // 0xRRGGBB
-  edge:          number;         // 0xRRGGBB
-  alpha:         number;         // 0-255
-  luminance:     number;         // 0-255
-  finish:        LDrawColorFinish;
+  code: number;
+  name: string;
+  value: number;        // 0xRRGGBB
+  edge: number;         // 0xRRGGBB
+  alpha: number;        // 0-255
+  luminance: number;    // 0-255
+  finish: "CHROME" | "METAL" | "PEARLESCENT" | "RUBBER" | "MATTE_METALLIC" | "NORMAL" | ...;
   isTransparent: boolean;
-  rgba:          [number, number, number, number]; // 0-1
-  edgeRgba:      [number, number, number, number]; // 0-1
-  material?:     LDrawMaterial;  // GLITTER / SPECKLE
+  rgba: [number, number, number, number];
+  edgeRgba: [number, number, number, number];
+  material?: { type: "GLITTER" | "SPECKLE"; fraction: number; ... };
 }
 ```
 
@@ -256,86 +305,22 @@ interface LDrawColor {
 
 ```ts
 interface FlatGeometry {
-  meshes: GeometryMesh[];   // triangles par couleur/texmap
-  edges:  GeometryEdges[];  // segments de ligne par couleur
-  aabb: {
-    min: Vec3; max: Vec3;
-    center: Vec3; size: Vec3;
-    radius: number;
-  };
+  meshes: GeometryMesh[];
+  edges: GeometryEdges[];
+  colorTable: Map<number, LDrawColor>;
+  aabb: AABB;
 }
 
 interface GeometryMesh {
   colorCode: number;
-  color:     LDrawColor;
   triangles: Array<{ a: GeometryVertex; b: GeometryVertex; c: GeometryVertex }>;
-  texmap?:   TexmapDefinition;
+  texmap?: TexmapDefinition;
 }
-```
 
----
-
-### Serveur HTTP Bun (exemple)
-
-```ts
-import { LDrawParser, createFilesystemResolver } from "./ldraw-parser/src/index.js";
-
-const parser = new LDrawParser({
-  resolveFile: createFilesystemResolver({ libraryRoot: process.env.LDRAW_LIB }),
-});
-
-Bun.serve({
-  port: 3000,
-  async fetch(req) {
-    const url = new URL(req.url);
-
-    // POST /parse  → JSON avec métadonnées + stats
-    if (req.method === "POST" && url.pathname === "/parse") {
-      const body = await req.text();
-      const { file, geometry } = await parser.parse(body, url.searchParams.get("name") ?? "model.ldr");
-      return Response.json({ meta: file.meta, stats: geometry ? parser.stats(geometry) : null });
-    }
-
-    // POST /thumbnail.svg  → image SVG
-    if (req.method === "POST" && url.pathname === "/thumbnail.svg") {
-      const { geometry } = await parser.parse(await req.text());
-      const svg = parser.toSvg(geometry!, {
-        azimuth:   parseFloat(url.searchParams.get("az")   ?? "45"),
-        elevation: parseFloat(url.searchParams.get("el")   ?? "30"),
-        width:     parseInt(  url.searchParams.get("size") ?? "512"),
-        height:    parseInt(  url.searchParams.get("size") ?? "512"),
-      });
-      return new Response(svg, { headers: { "Content-Type": "image/svg+xml" } });
-    }
-
-    // POST /model.glb  → binaire GLB
-    if (req.method === "POST" && url.pathname === "/model.glb") {
-      const { geometry } = await parser.parse(await req.text());
-      const glb = parser.toGlb(geometry!, { normals: true }, "m");
-      return new Response(glb, { headers: { "Content-Type": "model/gltf-binary" } });
-    }
-
-    return new Response("Not found", { status: 404 });
-  },
-});
-```
-
----
-
-## Structure des fichiers
-
-```
-src/
-├── types.ts          Toutes les interfaces TypeScript
-├── colors.ts         Table 200+ couleurs + parsing !COLOUR
-├── utils.ts          Matrices 4×4, Vec3, AABB, projection TEXMAP UV
-├── parser.ts         Parser ligne par ligne (types 0–5)
-├── resolver.ts       Résolution récursive async + aplatissement géométrie
-├── fs-resolver.ts    Résolveur filesystem Bun avec cache
-├── postprocess.ts    Conversion unités, merge, stats, LOD
-├── svg.ts            Thumbnail SVG (projection, shading, painter's algo)
-├── glb2.ts         GLB/glTF 2.0 binaire (indexed, PBR, textures, transmission)
-└── index.ts          Exports publics + classe LDrawParser
+interface GeometryVertex {
+  position: { x: number; y: number; z: number };
+  uv?: { u: number; v: number };
+}
 ```
 
 ---
@@ -349,17 +334,9 @@ src/
 | 1 plaque | 8 LDU = 3.2 mm | Hauteur d'une plaque |
 | 1 brique | 24 LDU = 9.6 mm | Hauteur d'une brique |
 
-Le GLB est généré en **mètres** par défaut (`unit: "m"`) pour respecter la convention glTF 2.0.
+Le GLB est généré en **mètres** par défaut pour respecter la convention glTF 2.0.
 
 ---
-
-## CLI
-
-exemple phare rouge : 6513963
-```bash
-bun run src/cli -f svg,glb --el 150 --lib <path>\ldraw\ -v --no-smooth --color 36 <path>\ldraw\parts\3024.dat
-bun run src/cli -f svg --lib <path>\ldraw\ -v --no-smooth --color 15 --el -20 --az -30  <path>>\ldraw\parts\105162p02.dat
-```
 
 ## Tests
 
@@ -367,7 +344,31 @@ bun run src/cli -f svg --lib <path>\ldraw\ -v --no-smooth --color 15 --el -20 --
 bun test
 ```
 
-35 tests couvrant : parser, couleurs, géométrie, BFC, TEXMAP, MPD, SVG et GLB.
+Tests couvrant : parser, couleurs, géométrie, BFC, TEXMAP, MPD, SVG, GLB, sérialisation, résolveur et textures.
+
+---
+
+## Structure du projet
+
+```
+src/
+├── index.ts          Export public + classe LDrawParser
+├── ldraw-part.ts     Classe LDrawPart ( géométrie + export)
+├── parser.ts         Parser ligne par ligne (types 0–5)
+├── resolver.ts       Résolution récursive async + aplatissement
+├── simple-resolver.ts Résolveur filesystem Bun avec cache
+├── colors.ts         Table 200+ couleurs + parsing !COLOUR
+├── types.ts          Interfaces TypeScript
+├── glb2.ts           Export GLB / glTF 2.0 (PBR, textures, transmission)
+├── glb-analyser.ts   Analyse de fichiers GLB
+├── svg.ts            Thumbnail SVG (projection, shading, painter's algo)
+├── postprocess.ts    Conversion unités, merge, stats, LOD
+├── utils.ts          Matrices 4×4, Vec3, AABB, projection TEXMAP
+├── normals.ts        Calcul de normales lissées
+├── weld.ts           Outils de soudure de sommets
+├── serialise.ts      Sérialisation de fichiers LDraw
+└── cli.ts            CLI batch de conversion
+```
 
 ---
 
