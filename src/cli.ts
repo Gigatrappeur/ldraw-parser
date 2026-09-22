@@ -30,7 +30,7 @@ import type { LDrawPart } from "./ldraw-part";
 interface CliOptions {
 	inputs: string[];
 	outDir: string;
-	formats: Set<"glb" | "gltf" | "svg" | "obj" | "json">;
+	formats: Set<"glb" | "gltf" | "svg" | "json">;
 	unit: string;
 	svgSize: number;
 	svgAzimuth: number;
@@ -110,8 +110,8 @@ function parseArgs(argv: string[]): CliOptions {
 			case "--json": opts.jsonOutput = true; break;
 			case "--format": case "-f": {
 				const fmts = (args[++i] ?? "glb,svg").split(",");
-				opts.formats = new Set(fmts.filter((f): f is "glb" | "gltf" | "svg" | "obj" | "json" =>
-					["glb", "gltf", "svg", "obj", "json"].includes(f)));
+				opts.formats = new Set(fmts.filter((f): f is "glb" | "gltf" | "svg" | "json" =>
+					["glb", "gltf", "svg", "json"].includes(f)));
 				break;
 			}
 			default:
@@ -134,7 +134,7 @@ USAGE
 
 OPTIONS
   -o, --out <dir>       Output directory (default: ./out)
-  -f, --format <list>   Comma-separated formats: glb,gltf,svg,obj,json  (default: glb,svg)
+  -f, --format <list>   Comma-separated formats: glb,gltf,svg,json  (default: glb,svg)
   --unit <unit>         Output unit: ldu|mm|cm|m|in|studs  (default: m)
   --lib, --library <p>  Path to LDraw library root (env: LDRAW_LIB)
   --svg-size <px>       SVG thumbnail size in pixels (default: 512)
@@ -153,7 +153,7 @@ OPTIONS
 
 EXAMPLES
   bun run src/cli.ts model.mpd
-  bun run src/cli.ts -f glb,svg,obj -o ./exports *.ldr
+  bun run src/cli.ts -f glb,svg -o ./exports *.ldr
   bun run src/cli.ts --stats model.ldr
   bun run src/cli.ts --lib /usr/share/ldraw --unit mm -f glb model.ldr
   bun run src/cli.ts --color 4 model.dat
