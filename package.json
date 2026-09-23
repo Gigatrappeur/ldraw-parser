@@ -1,6 +1,6 @@
 {
 	"name": "@gigatrappeur/ldraw-parser",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Un parser LDraw minimal pour Node.js (Bun) qui analyse des fichiers .ldr/.dat et fournit une géométrie plate (FlatGeometry).",
 	"main": "src/index.ts",
 	"types": "src/index.ts",

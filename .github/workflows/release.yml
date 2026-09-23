@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   release-and-publish:
@@ -26,7 +27,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
+          # pas de registry-url : ça écrirait un _authToken vide dans .npmrc
+          # et court-circuiterait l'échange OIDC (trusted publishing)
 
       - name: Read version from package.json
         id: version
@@ -34,7 +36,6 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-          echo "npm_tag=latest" >> "$GITHUB_OUTPUT"
 
       - name: Skip if tag already exists
         id: check
@@ -67,8 +68,10 @@ jobs:
             --generate-notes \
             --target "${{ github.sha }}"
 
-    #   - name: Publish to npm
-    #     if: steps.check.outputs.exists == 'false'
-    #     run: npm publish --access public --tag ${{ steps.version.outputs.npm_tag }}
-    #     env:
-    #       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Upgrade npm for OIDC support
+        if: steps.check.outputs.exists == 'false'
+        run: npm install -g npm@latest
+
+      - name: Publish to npm
+        if: steps.check.outputs.exists == 'false'
+        run: npm publish --access public
