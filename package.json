@@ -2,36 +2,35 @@
 	"name": "@gigatrappeur/ldraw-parser",
 	"version": "1.0.1",
 	"description": "Un parser LDraw minimal pour Node.js (Bun) qui analyse des fichiers .ldr/.dat et fournit une géométrie plate (FlatGeometry).",
-	"main": "src/index.ts",
-	"types": "src/index.ts",
-	"type": "module",
+	"author": "Gigatrappeur",
+	"homepage": "https://github.com/Gigatrappeur/ldraw-parser#readme",
 	"license": "MIT",
-	"exports": {
-		".": "./src/index.ts"
-	},
-	"files": [
-		"src/",
-		"README.md",
-		"LICENSE"
-	],
+	"type": "module",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/Gigatrappeur/ldraw-parser"
 	},
-	"keywords": [
-		"ldraw",
-		"parser",
-		"geometry",
-		"bricks"
-	],
-	"author": "Gigatrappeur",
+	"keywords": [ "ldraw", "parser", "geometry", "bricks" ],
+	"engines": {
+		"bun": ">=1"
+	},
+	"main": "./src/index.ts",
+	"types": "./src/index.ts",
+	"exports": {
+		".": "./src/index.ts"
+	},
 	"scripts": {
-		"test": "bun test test/",
+		"test": "bun test",
 		"tsc": "tsc",
 		"typecheck": "tsc --noEmit"
 	},
 	"devDependencies": {
 		"@types/bun": "^1.4",
-		"typescript": "^7"
-	}
+		"typescript": "^7.0.2"
+	},
+	"files": [
+		"src/",
+		"README.md",
+		"LICENSE"
+	]
 }
