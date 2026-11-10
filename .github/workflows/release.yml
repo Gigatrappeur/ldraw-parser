@@ -3,8 +3,6 @@ name: Release and publish
 on:
   push:
     branches: [ main ]
-    paths:
-      - package.json
 
 permissions:
   contents: write   # tag + release
@@ -53,6 +51,8 @@ jobs:
 
       - name: Create GitHub release
         if: steps.check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${{ steps.version.outputs.tag }}" \
             --title "${{ steps.version.outputs.tag }}" \
