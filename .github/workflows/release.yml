@@ -59,9 +59,9 @@ jobs:
             --generate-notes \
             --target "${{ github.sha }}"
 
-      - name: Configure GitHub Packages auth
-        if: steps.check.outputs.exists == 'false'
-        run: printf '@gigatrappeur:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=%s\n' "${{ secrets.GITHUB_TOKEN }}" > .npmrc
+    #   - name: Configure GitHub Packages auth
+    #     if: steps.check.outputs.exists == 'false'
+    #     run: printf '@gigatrappeur:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=%s\n' "${{ secrets.GITHUB_TOKEN }}" > .npmrc
 
       - name: Publish to GitHub Packages
         if: steps.check.outputs.exists == 'false'
