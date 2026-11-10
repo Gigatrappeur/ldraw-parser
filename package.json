@@ -12,7 +12,7 @@
 	},
 	"keywords": [ "ldraw", "parser", "geometry", "bricks" ],
 	"engines": {
-		"bun": ">=1"
+		"bun": ">=1.4"
 	},
 	"main": "./src/index.ts",
 	"types": "./src/index.ts",
