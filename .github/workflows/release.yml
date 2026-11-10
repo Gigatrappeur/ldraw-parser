@@ -21,6 +21,10 @@ jobs:
         with:
           bun-version: latest
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
       - name: Read version from package.json
         id: version
         run: |
@@ -59,10 +63,10 @@ jobs:
             --generate-notes \
             --target "${{ github.sha }}"
 
-    #   - name: Configure GitHub Packages auth
-    #     if: steps.check.outputs.exists == 'false'
-    #     run: printf '@gigatrappeur:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=%s\n' "${{ secrets.GITHUB_TOKEN }}" > .npmrc
-
-      - name: Publish to GitHub Packages
+      - name: Upgrade npm for OIDC support
         if: steps.check.outputs.exists == 'false'
-        run: bun publish --access public
+        run: npm install -g npm@latest
+
+      - name: Publish to npm
+        if: steps.check.outputs.exists == 'false'
+        run: npm publish --access public
